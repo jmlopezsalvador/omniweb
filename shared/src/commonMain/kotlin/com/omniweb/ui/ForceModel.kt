@@ -23,6 +23,7 @@ data class ForcedItem(
 )
 
 val GOOGLE_IMAGES = Site("google-images", "Google Imágenes", "https://www.google.com/imghp?hl=es")
+val YOUTUBE = Site("youtube", "YouTube", "https://m.youtube.com")
 
 /** Añade https:// si falta y convierte texto suelto en una búsqueda de Google Imágenes. */
 fun normalizeUrl(input: String): String {
@@ -36,7 +37,7 @@ fun normalizeUrl(input: String): String {
 
 /** Sitios y forzajes en almacenamiento local. Un forzaje por sitio (el último capturado). */
 class ForceStore(private val prefs: KeyValueStore) {
-    fun sites(): List<Site> = listOf(GOOGLE_IMAGES) + customSites()
+    fun sites(): List<Site> = listOf(GOOGLE_IMAGES, YOUTUBE) + customSites()
 
     private fun customSites(): List<Site> =
         (prefs.getString("sites") ?: "").lines().filter { it.isNotBlank() }.mapNotNull {

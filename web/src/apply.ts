@@ -120,30 +120,67 @@ export function textLeaves(container: Element, media: Element): Element[] {
   );
 }
 
+function area(e: Element): number {
+  const r = e.getBoundingClientRect();
+  return Math.max(0, r.width) * Math.max(0, r.height);
+}
+
 /**
- * Contenedor «tarjeta» de un medio con sus textos: sube hasta el primer ancestro con texto, sin llegar a uno que
- * contenga varias imágenes (la rejilla). Capturar y aplicar usan EXACTAMENTE esta función para que los índices coincidan.
+ * ¿Hay en `c` otro medio «significativo» (otra tarjeta)? Se ignoran los pequeños (avatares, iconos: < 25% del medio
+ * objetivo). Cuenta img/video y elementos con background-image en línea.
+ */
+function hasOtherMedia(c: Element, media: Element): boolean {
+  const a = area(media);
+  return Array.from(c.querySelectorAll('img,video,[style*="background-image"]')).some(
+    (m) => m !== media && !media.contains(m) && !m.contains(media) && !(a > 0 && area(m) < a * 0.25),
+  );
+}
+
+/**
+ * Contenedor «tarjeta» de un medio con sus textos: sube mientras el ancestro siga conteniendo solo ese medio (más
+ * avatares/iconos pequeños) y no sea mucho mayor que él, y se queda con el MÁS ALTO que tenga texto (título, canal, fecha…).
+ * Capturar y aplicar usan EXACTAMENTE esta función para que los índices coincidan.
  */
 export function findTextContainer(media: Element): { container: Element; leaves: Element[] } | null {
+  const a = area(media);
+  let best: { container: Element; leaves: Element[] } | null = null;
   let c: Element | null = media.parentElement;
-  for (let depth = 0; c && depth < 6 && c !== c.ownerDocument.body; depth++, c = c.parentElement) {
-    if (c.querySelectorAll('img,video').length > 1) return null;
+  for (let depth = 0; c && depth < 8 && c !== c.ownerDocument.body; depth++, c = c.parentElement) {
+    if (hasOtherMedia(c, media)) break; // ya es la rejilla
+    if (a > 0 && area(c) > a * 4) break; // contenedor demasiado grande para ser «la tarjeta»
     const leaves = textLeaves(c, media);
-    if (leaves.length) return { container: c, leaves };
+    if (leaves.length) best = { container: c, leaves };
   }
-  return null;
+  return best;
+}
+
+/**
+ * Orden de asignación de textos: primero el TÍTULO (hoja de mayor tamaño de letra; a igualdad, la de más texto; a igualdad,
+ * la primera) y después el resto en orden de documento. Así el título cae siempre en el hueco del título aunque la tarjeta
+ * de destino tenga otra plantilla (p. ej. YouTube mezcla miniaturas verticales y listas con el texto a la derecha).
+ */
+export function orderLeaves(leaves: Element[]): Element[] {
+  if (leaves.length < 2) return leaves;
+  const fs = (n: Element) => parseFloat(n.ownerDocument.defaultView!.getComputedStyle(n).fontSize) || 0;
+  let best = 0;
+  for (let i = 1; i < leaves.length; i++) {
+    const a = fs(leaves[i]);
+    const b = fs(leaves[best]);
+    if (a > b || (a === b && (leaves[i].textContent ?? '').trim().length > (leaves[best].textContent ?? '').trim().length)) best = i;
+  }
+  return [leaves[best], ...leaves.filter((_, i) => i !== best)];
 }
 
 export function collectTexts(media: Element): string[] {
-  return (findTextContainer(media)?.leaves ?? []).map((n) => (n.textContent ?? '').trim());
+  return orderLeaves(findTextContainer(media)?.leaves ?? []).map((n) => (n.textContent ?? '').trim());
 }
 
-/** Sustituye los textos de la tarjeta, uno a uno por posición. Devuelve contenedor y elementos cambiados. */
+/** Sustituye los textos de la tarjeta (título primero, luego el resto en orden). Devuelve contenedor y elementos cambiados. */
 export function applyTexts(media: Element, texts: string[]): { container: Element; targets: Element[] } | null {
   const r = findTextContainer(media);
   if (!r) return null;
   const targets: Element[] = [];
-  r.leaves.forEach((leaf, i) => {
+  orderLeaves(r.leaves).forEach((leaf, i) => {
     if (i < texts.length) {
       leaf.textContent = texts[i];
       targets.push(leaf);

@@ -49,6 +49,14 @@ export function createCaptureMode(win: Window, onCapture: (c: Capture) => void):
     });
   };
 
+  // Muchas webs (YouTube móvil) navegan con pointerup/touchend y no con click: con la captura armada silenciamos toda la
+  // familia de eventos del toque para que la página no los vea. El click sintetizado lo tratamos arriba.
+  const swallow = (e: Event) => {
+    if (on) e.stopImmediatePropagation();
+  };
+  for (const t of ['touchstart', 'touchend', 'touchcancel', 'pointerdown', 'pointerup', 'pointercancel', 'mousedown', 'mouseup']) {
+    win.addEventListener(t, swallow, true);
+  }
   // capture=true y a nivel de window: llegamos antes que los manejadores de la página
   win.addEventListener('click', onClick, true);
 

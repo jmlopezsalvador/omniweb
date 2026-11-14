@@ -78,7 +78,8 @@ Si la app lleva una página de «Instrucciones» de cara al usuario final, mante
 - Probar en emulador: `adb install -r app/build/outputs/apk/debug/app-debug.apk`, abrir y hacer swipe; captura con `adb exec-out screencap -p`.
 
 ## Estado de fases
-- **Fase 2 hecha (pendiente de commit)**: inicio con lista de sitios (Google Imágenes + añadir URL), «Preparar» (captura: navegar → «Capturar elemento» → tocar → guardar) y «Efecto» (abre la página capturada y fuerza imagen + todos los textos). Un forzaje por sitio.
+- **Fase 3 en curso**: YouTube probado (sitio predefinido `YOUTUBE`, m.youtube.com; el modo genérico basta, ver lecciones). Pendiente: Netflix, Amazon, Instagram (uno a uno; pueden exigir login).
+- **Fase 2 hecha**: inicio con lista de sitios (Google Imágenes + añadir URL), «Preparar» (captura: navegar → «Capturar elemento» → tocar → guardar) y «Efecto» (abre la página capturada y fuerza imagen + todos los textos). Un forzaje por sitio.
 - **Fase 1 hecha**: modo genérico probado en Google Imágenes real (emulador) + barra de URL mínima en `App.kt`. La imagen forzada sigue siendo un SVG de prueba (`SPIKE_IMAGE`); el selector real llega en la Fase 2.
 - **Fase 0 hecha**: spike Android con página local (sustituye img/picture/background, título, re-render, auto/manual, reset).
 
@@ -99,3 +100,11 @@ Si la app lleva una página de «Instrucciones» de cara al usuario final, mante
 - `navId` en `ForcerWebView`: el botón «Ir» recarga aunque la URL sea la misma.
 - Pruebas en emulador con `uiautomator`: tocar por texto, p. ej. un script que lea `uiautomator dump` y haga `adb shell input tap`.
 - Pendiente/limitaciones conocidas: la imagen se recorta con `object-fit: cover` al hueco de la tarjeta (no se reajusta la proporción); sin borrar/editar sitios; sin gesto oculto ni reset de trazas (Fase 5).
+
+## Lecciones de YouTube (Fase 3)
+- YouTube móvil abre el vídeo con `pointerup`/`touchend`, no con `click`: con la captura armada el motor silencia (`stopImmediatePropagation`) toda la familia touch/pointer/mouse. Test e2e con `?navonpointer=1`.
+- Sin sesión, `m.youtube.com` no tiene feed de inicio («Try searching»): el mago prepara y actúa en una búsqueda (`/results?search_query=…`); el forzaje guarda esa `pageUrl`.
+- YouTube mezcla plantillas de tarjeta (Shorts vertical con el título sobre la miniatura / lista con el texto a la derecha). Los textos se asignan «título primero» (hoja de mayor `font-size`) y el resto en orden (`orderLeaves`); capturar y aplicar usan el mismo orden. Sigue sin ser perfecto si las plantillas difieren mucho.
+- `findTextContainer` sube hasta el contenedor MÁS ALTO que solo contenga ese medio (ignora medios <25% de su área: avatares) y no sea >4× su área.
+- Límites vistos: el avatar del canal no se cambia (queda el de la tarjeta original) y chips como «♪ duración» pueden quedar sueltos. Posible mejora: capturar también imágenes pequeñas de la tarjeta.
+- Teclear en el campo de URL con `adb input text` es poco fiable (se trunca/concatena): `tap`, esperar, Ctrl+A (`keycombination 113 29`), Supr (`keyevent 67`), escribir.

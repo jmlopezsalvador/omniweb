@@ -29,8 +29,8 @@ class ForceStoreTest {
         val a = ForceStore(mem).addSite("YouTube", "https://m.youtube.com")
         ForceStore(mem).addSite("Amazon", "https://www.amazon.es")
         val sites = ForceStore(mem).sites()
-        assertEquals(listOf("google-images", a.id, "c2"), sites.map { it.id })
-        assertEquals("https://m.youtube.com", sites[1].startUrl)
+        assertEquals(listOf("google-images", "youtube", a.id, "c2"), sites.map { it.id })
+        assertEquals("https://m.youtube.com", sites[2].startUrl)
     }
 
     @Test fun siteNamesCannotBreakTheEncoding() {

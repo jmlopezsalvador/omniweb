@@ -48,6 +48,16 @@
   new IntersectionObserver(function (e) { if (e[0].isIntersecting) more(); }, { rootMargin: '1500px' })
     .observe(document.getElementById('sentinel'));
 
+  // Imita webs como YouTube móvil: «navegan» con pointerup/touchend, no con click
+  if (params.get('navonpointer') === '1') {
+    ['pointerup', 'touchend', 'mouseup'].forEach(function (t) {
+      document.addEventListener(t, function (e) {
+        var c = e.target.closest && e.target.closest('.card');
+        if (c) window.__navigated = c.dataset.n;
+      });
+    });
+  }
+
   if (rerender) {
     // Cada 150 ms «el framework» restaura el src original de las imágenes
     setInterval(function () {

@@ -6,11 +6,11 @@ const PAGE = pathToFileURL(resolve('dist/test/page.html')).href;
 const BUNDLE = resolve('dist/omniweb.js');
 
 /** Simula el puente nativo: guarda lo que el motor envía. */
-async function open(page: Page) {
+async function open(page: Page, query = '') {
   await page.addInitScript(() => {
     (window as any).OmniBridge = { onCapture: (j: string) => ((window as any).__cap = JSON.parse(j)) };
   });
-  await page.goto(PAGE);
+  await page.goto(PAGE + query);
   await page.addScriptTag({ path: BUNDLE });
 }
 
@@ -78,4 +78,17 @@ test('efecto: sustituye imagen y TODOS los textos capturados en otra tarjeta', a
     return [c.querySelector('h3')!.textContent, c.querySelector('.src')!.textContent];
   });
   expect(txt).toEqual(['Predicción', 'Origen visible']);
+});
+
+test('armado: la web no ve pointerup/touchend (como YouTube); desarmado, sí', async ({ page }) => {
+  await open(page, '?navonpointer=1');
+  await page.evaluate(() => (window as any).OmniWeb.startCapture());
+  const p = await centerCard(page, 4);
+  await page.mouse.click(p.x, p.y);
+  expect(await page.evaluate(() => (window as any).__cap)).toBeTruthy();
+  expect(await page.evaluate(() => (window as any).__navigated)).toBeUndefined();
+  // desarmado: la web recibe el toque con normalidad
+  await page.evaluate(() => (window as any).OmniWeb.endCapture());
+  await page.mouse.click(p.x, p.y);
+  expect(await page.evaluate(() => (window as any).__navigated)).toBe('4');
 });
