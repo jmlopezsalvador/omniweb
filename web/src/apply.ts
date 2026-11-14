@@ -106,18 +106,35 @@ export function applyTitleNear(media: Element, title: string): { container: Elem
   return null;
 }
 
-const NON_TEXT = /^(script|style|svg|path|button|img|video|source|noscript)$/i;
+const NON_TEXT = /^(script|style|svg|path|button|img|video|source|noscript|textarea|input|select)$/i;
 
-/** Textos «hoja» (sin hijos elemento) de un contenedor, en orden de documento, sin contar el propio medio. */
-export function textLeaves(container: Element, media: Element): Element[] {
-  return Array.from(container.querySelectorAll('*')).filter(
-    (n) =>
-      n.children.length === 0 &&
-      !n.contains(media) &&
-      !NON_TEXT.test(n.tagName) &&
-      !n.closest('button,[role="button"]') &&
-      (n.textContent ?? '').trim().length >= 1,
-  );
+/** ¿Se ve el elemento? (descarta textos «solo para lectores de pantalla», recortados a 1px, display:none, invisibles). */
+function isVisible(n: Element): boolean {
+  const r = n.getBoundingClientRect();
+  if (r.width < 2 || r.height < 2) return false;
+  const st = n.ownerDocument.defaultView!.getComputedStyle(n);
+  return st.display !== 'none' && st.visibility !== 'hidden' && st.opacity !== '0';
+}
+
+/**
+ * Unidades de texto de un contenedor: NODOS DE TEXTO no vacíos, en orden de documento. Se usan nodos y no elementos
+ * porque muchas webs mezclan texto y etiquetas (`<span>23<span>.</span>99</span>`, Amazon). Si la página tiene layout
+ * (el medio mide algo) solo cuentan los visibles; sin layout (jsdom) no se filtra.
+ */
+export function textLeaves(container: Element, media: Element): Text[] {
+  const layout = media.getBoundingClientRect().height > 0;
+  const doc = container.ownerDocument;
+  const walker = doc.createTreeWalker(container, 4 /* NodeFilter.SHOW_TEXT */);
+  const out: Text[] = [];
+  for (let n = walker.nextNode(); n; n = walker.nextNode()) {
+    const t = n as Text;
+    const el = t.parentElement;
+    if (!el || (t.nodeValue ?? '').trim().length < 1) continue;
+    if (media.contains(t) || NON_TEXT.test(el.tagName) || el.closest('button,[role="button"],noscript,script,style')) continue;
+    if (layout && !isVisible(el)) continue;
+    out.push(t);
+  }
+  return out;
 }
 
 function area(e: Element): number {
@@ -138,56 +155,124 @@ function hasOtherMedia(c: Element, media: Element): boolean {
 
 /**
  * Contenedor «tarjeta» de un medio con sus textos: sube mientras el ancestro siga conteniendo solo ese medio (más
- * avatares/iconos pequeños) y no sea mucho mayor que él, y se queda con el MÁS ALTO que tenga texto (título, canal, fecha…).
+ * avatares/iconos pequeños) y no sea mucho más alto que él, y se queda con el MÁS ALTO que tenga texto (título, canal, fecha…).
  * Capturar y aplicar usan EXACTAMENTE esta función para que los índices coincidan.
  */
-export function findTextContainer(media: Element): { container: Element; leaves: Element[] } | null {
-  const a = area(media);
-  let best: { container: Element; leaves: Element[] } | null = null;
+export function findTextContainer(media: Element): { container: Element; leaves: Text[] } | null {
+  const mh = media.getBoundingClientRect().height;
+  const vh = media.ownerDocument.defaultView!.innerHeight;
+  let best: { container: Element; leaves: Text[] } | null = null;
   let c: Element | null = media.parentElement;
-  for (let depth = 0; c && depth < 8 && c !== c.ownerDocument.body; depth++, c = c.parentElement) {
+  for (let depth = 0; c && depth < 16 && c !== c.ownerDocument.body; depth++, c = c.parentElement) {
     if (hasOtherMedia(c, media)) break; // ya es la rejilla
-    if (a > 0 && area(c) > a * 4) break; // contenedor demasiado grande para ser «la tarjeta»
+    // Demasiado alto para ser «la tarjeta». Se mide la ALTURA, no el área: en tarjetas de lista (Amazon, YouTube) la
+    // imagen es pequeña y el texto va al lado, y el área de la tarjeta puede ser >5× la de la imagen.
+    if (mh > 0 && c.getBoundingClientRect().height > Math.max(mh * 3, vh * 0.4)) break;
     const leaves = textLeaves(c, media);
     if (leaves.length) best = { container: c, leaves };
   }
   return best;
 }
 
+const textOf = (n: Text) => (n.nodeValue ?? '').trim();
+
 /**
- * Orden de asignación de textos: primero el TÍTULO (hoja de mayor tamaño de letra; a igualdad, la de más texto; a igualdad,
- * la primera) y después el resto en orden de documento. Así el título cae siempre en el hueco del título aunque la tarjeta
- * de destino tenga otra plantilla (p. ej. YouTube mezcla miniaturas verticales y listas con el texto a la derecha).
+ * Orden de asignación de textos: primero el TÍTULO y después el resto en orden de documento. Así el título cae siempre en
+ * el hueco del título aunque la tarjeta de destino tenga otra plantilla (YouTube mezcla miniaturas verticales y listas).
+ * Título = el texto de mayor tamaño de letra ENTRE LOS LARGOS (al menos la mitad que el más largo): en tiendas el
+ * precio/descuento tiene más letra que el nombre del producto, pero es corto. A igualdad, el de más texto, y luego el primero.
  */
-export function orderLeaves(leaves: Element[]): Element[] {
+export function orderLeaves(leaves: Text[]): Text[] {
   if (leaves.length < 2) return leaves;
-  const fs = (n: Element) => parseFloat(n.ownerDocument.defaultView!.getComputedStyle(n).fontSize) || 0;
-  let best = 0;
-  for (let i = 1; i < leaves.length; i++) {
-    const a = fs(leaves[i]);
-    const b = fs(leaves[best]);
-    if (a > b || (a === b && (leaves[i].textContent ?? '').trim().length > (leaves[best].textContent ?? '').trim().length)) best = i;
-  }
+  const fs = (n: Text) => parseFloat(n.ownerDocument.defaultView!.getComputedStyle(n.parentElement!).fontSize) || 0;
+  const maxLen = Math.max(...leaves.map((n) => textOf(n).length));
+  let best = -1;
+  leaves.forEach((n, i) => {
+    if (textOf(n).length < maxLen / 2) return;
+    const b = leaves[best];
+    if (best < 0 || fs(n) > fs(b) || (fs(n) === fs(b) && textOf(n).length > textOf(b).length)) best = i;
+  });
   return [leaves[best], ...leaves.filter((_, i) => i !== best)];
 }
 
 export function collectTexts(media: Element): string[] {
-  return orderLeaves(findTextContainer(media)?.leaves ?? []).map((n) => (n.textContent ?? '').trim());
+  return orderLeaves(findTextContainer(media)?.leaves ?? []).map(textOf);
 }
 
-/** Sustituye los textos de la tarjeta (título primero, luego el resto en orden). Devuelve contenedor y elementos cambiados. */
-export function applyTexts(media: Element, texts: string[]): { container: Element; targets: Element[] } | null {
+/** Sustituye los textos de la tarjeta (título primero, luego el resto en orden). Devuelve contenedor y nodos cambiados. */
+export function applyTexts(media: Element, texts: string[]): { container: Element; targets: Text[] } | null {
   const r = findTextContainer(media);
   if (!r) return null;
-  const targets: Element[] = [];
+  const targets: Text[] = [];
   orderLeaves(r.leaves).forEach((leaf, i) => {
     if (i < texts.length) {
-      leaf.textContent = texts[i];
+      leaf.nodeValue = texts[i];
       targets.push(leaf);
     }
   });
   r.container.querySelectorAll('img').forEach((img) => img.hasAttribute('alt') && texts[0] && img.setAttribute('alt', texts[0]));
   return { container: r.container, targets };
+}
+
+
+const MAX_SNAPSHOT = 200_000;
+export const MAIN_ATTR = 'data-omni-main';
+
+/** Ruta de índices (entre hijos elemento) desde `root` hasta `el`. */
+function indexPath(root: Element, el: Element): number[] {
+  const path: number[] = [];
+  for (let n: Element | null = el; n && n !== root; n = n.parentElement) {
+    path.unshift(Array.prototype.indexOf.call(n.parentElement!.children, n));
+  }
+  return path;
+}
+
+/**
+ * Instantánea de la tarjeta de un medio: HTML interior de su contenedor, sin scripts, manejadores `on*` ni ids, con el medio
+ * principal marcado. La web ya tiene el CSS de la tarjeta, así que reinsertarla se ve nativa. Devuelve null si el contenedor
+ * lleva componentes personalizados DEFINIDOS (`ytm-…`: se re-renderizan al insertarse y quedarían vacíos; los no definidos son inertes) o es enorme.
+ */
+export function snapshotCard(media: Element): string | null {
+  const r = findTextContainer(media);
+  if (!r) return null;
+  const root = r.container;
+  const registry = media.ownerDocument.defaultView!.customElements;
+  if ([root, ...Array.from(root.querySelectorAll('*'))].some((e) => e.tagName.includes('-') && registry.get(e.tagName.toLowerCase()))) return null;
+  const clone = root.cloneNode(true) as Element;
+  const main = path2(clone, indexPath(root, media));
+  if (!main) return null;
+  main.setAttribute(MAIN_ATTR, '1');
+  (main as HTMLElement).style?.removeProperty('outline'); // resaltado del modo captura
+  main.removeAttribute(FORCED_ATTR);
+  clone.querySelectorAll('script,noscript').forEach((e) => e.remove());
+  clone.querySelectorAll('*').forEach((e) => {
+    for (const a of Array.from(e.attributes)) if (/^on/i.test(a.name) || a.name === 'id') e.removeAttribute(a.name);
+  });
+  const html = clone.innerHTML;
+  return html.length <= MAX_SNAPSHOT ? html : null;
+}
+
+function path2(root: Element, path: number[]): Element | null {
+  let n: Element | undefined = root;
+  for (const i of path) n = n?.children[i];
+  return n ?? null;
+}
+
+/** Pone la instantánea dentro de `container` y la imagen capturada en su medio principal. */
+export function applySnapshotAt(container: Element, html: string, imageUrl: string): { main: Element; isApplied: () => boolean } | null {
+  container.innerHTML = html;
+  const main = container.querySelector(`[${MAIN_ATTR}]`);
+  if (!main) return null;
+  main.removeAttribute(MAIN_ATTR);
+  return { main, isApplied: applyImage(main, imageUrl) };
+}
+
+/** Localiza el contenedor de `media` y le aplica la instantánea. */
+export function applySnapshot(media: Element, html: string, imageUrl: string): { container: Element; main: Element; isApplied: () => boolean } | null {
+  const r = findTextContainer(media);
+  if (!r) return null;
+  const s = applySnapshotAt(r.container, html, imageUrl);
+  return s ? { container: r.container, ...s } : null;
 }
 
 /** URL de la imagen que muestra un medio (img/video poster/background-image), absoluta. */

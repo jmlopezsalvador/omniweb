@@ -29,8 +29,8 @@ class ForceStoreTest {
         val a = ForceStore(mem).addSite("YouTube", "https://m.youtube.com")
         ForceStore(mem).addSite("Amazon", "https://www.amazon.es")
         val sites = ForceStore(mem).sites()
-        assertEquals(listOf("google-images", "youtube", a.id, "c2"), sites.map { it.id })
-        assertEquals("https://m.youtube.com", sites[2].startUrl)
+        assertEquals(listOf("google-images", "youtube", "amazon", a.id, "c2"), sites.map { it.id })
+        assertEquals("https://m.youtube.com", sites[3].startUrl)
     }
 
     @Test fun siteNamesCannotBreakTheEncoding() {
@@ -44,22 +44,28 @@ class ForceStoreTest {
     @Test fun savesAndLoadsAForcedItem() {
         val st = ForceStore(MemoryStore())
         assertNull(st.load("google-images"))
-        val item = ForcedItem("data:image/jpeg;base64,AAAA", listOf("Título", "Fuente\ncon salto"), "https://g.co/x?y=1", 1.5f)
+        val item = ForcedItem("data:image/jpeg;base64,AAAA", listOf("Título", "Fuente\ncon salto"), "<div>a\tb\n<b>x</b></div>", "https://g.co/x?y=1", 1.5f)
         st.save("google-images", item)
         assertEquals(item, st.load("google-images"))
     }
 
     @Test fun oneForcedItemPerSiteLastWins() {
         val st = ForceStore(MemoryStore())
-        st.save("s", ForcedItem("data:a", listOf("1", "2", "3"), "p", 1f))
-        st.save("s", ForcedItem("data:b", listOf("x"), "q", 2f))
+        st.save("s", ForcedItem("data:a", listOf("1", "2", "3"), null, "p", 1f))
+        st.save("s", ForcedItem("data:b", listOf("x"), null, "q", 2f))
         assertEquals(listOf("x"), st.load("s")!!.texts)
         assertEquals("data:b", st.load("s")!!.imageData)
     }
 
+    @Test fun itemWithoutHtmlLoadsNullHtml() {
+        val st = ForceStore(MemoryStore())
+        st.save("s", ForcedItem("data:a", listOf("1"), null, "p", 1f))
+        assertNull(st.load("s")!!.html)
+    }
+
     @Test fun clearRemovesTheItem() {
         val st = ForceStore(MemoryStore())
-        st.save("s", ForcedItem("data:a", listOf("1"), "p", 1f))
+        st.save("s", ForcedItem("data:a", listOf("1"), null, "p", 1f))
         st.clear("s")
         assertNull(st.load("s"))
     }

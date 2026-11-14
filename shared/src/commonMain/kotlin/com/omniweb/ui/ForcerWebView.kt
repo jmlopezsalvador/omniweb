@@ -9,6 +9,8 @@ data class ForceConfig(
     val imageUrl: String,
     /** Textos de la tarjeta capturada, por posición; sustituyen a los de la tarjeta forzada. */
     val texts: List<String> = emptyList(),
+    /** Instantánea HTML de la tarjeta capturada; si hay, tiene prioridad sobre `texts`. */
+    val html: String? = null,
     val idleMs: Int = 450,
     /** true = automático al parar el scroll; false = solo manual (gesto oculto). */
     val auto: Boolean = true,

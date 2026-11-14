@@ -72,7 +72,7 @@ fun OmniWebRoot(prefs: KeyValueStore) {
                 )
                 is Screen.EffectOf -> ForcerWebView(
                     url = s.item.pageUrl.ifBlank { s.site.startUrl },
-                    config = ForceConfig(imageUrl = s.item.imageData, texts = s.item.texts),
+                    config = ForceConfig(imageUrl = s.item.imageData, texts = s.item.texts, html = s.item.html),
                     captureMode = false,
                     armed = false,
                     onCapture = {},
@@ -211,7 +211,7 @@ private fun CaptureScreen(site: Site, store: ForceStore, onDone: (saved: Boolean
                             if (data == null) {
                                 error = "No se pudo obtener la imagen. Elige otro elemento."
                             } else {
-                                store.save(site.id, ForcedItem(data, cap.texts, cap.pageUrl, cap.aspect))
+                                store.save(site.id, ForcedItem(data, cap.texts, cap.html, cap.pageUrl, cap.aspect))
                                 onDone(true)
                             }
                         }

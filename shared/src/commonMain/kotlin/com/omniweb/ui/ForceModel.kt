@@ -9,6 +9,8 @@ data class Capture(
     /** Bytes de la imagen como data: URL si el WebView pudo leerlos; si no, la app la descarga desde `imageUrl`. */
     val imageData: String?,
     val texts: List<String>,
+    /** Instantánea HTML de la tarjeta (null si no era clonable: en ese caso se usan los textos). */
+    val html: String? = null,
     val pageUrl: String,
     val aspect: Float,
 )
@@ -17,6 +19,8 @@ data class Capture(
 data class ForcedItem(
     val imageData: String,
     val texts: List<String>,
+    /** Instantánea HTML de la tarjeta capturada; el efecto la reinserta tal cual (prioridad sobre `texts`). */
+    val html: String? = null,
     /** Página donde se capturó; el modo efecto la abre ya preparada. */
     val pageUrl: String,
     val aspect: Float,
@@ -24,6 +28,7 @@ data class ForcedItem(
 
 val GOOGLE_IMAGES = Site("google-images", "Google Imágenes", "https://www.google.com/imghp?hl=es")
 val YOUTUBE = Site("youtube", "YouTube", "https://m.youtube.com")
+val AMAZON = Site("amazon", "Amazon", "https://www.amazon.es/s?k=auriculares")
 
 /** Añade https:// si falta y convierte texto suelto en una búsqueda de Google Imágenes. */
 fun normalizeUrl(input: String): String {
@@ -37,7 +42,7 @@ fun normalizeUrl(input: String): String {
 
 /** Sitios y forzajes en almacenamiento local. Un forzaje por sitio (el último capturado). */
 class ForceStore(private val prefs: KeyValueStore) {
-    fun sites(): List<Site> = listOf(GOOGLE_IMAGES, YOUTUBE) + customSites()
+    fun sites(): List<Site> = listOf(GOOGLE_IMAGES, YOUTUBE, AMAZON) + customSites()
 
     private fun customSites(): List<Site> =
         (prefs.getString("sites") ?: "").lines().filter { it.isNotBlank() }.mapNotNull {
@@ -63,6 +68,7 @@ class ForceStore(private val prefs: KeyValueStore) {
         return ForcedItem(
             imageData = image,
             texts = texts,
+            html = prefs.getString("f.$siteId.html")?.takeIf { it.isNotEmpty() },
             pageUrl = prefs.getString("f.$siteId.page") ?: "",
             aspect = prefs.getLong("f.$siteId.aspect", 1000L) / 1000f,
         )
@@ -72,6 +78,7 @@ class ForceStore(private val prefs: KeyValueStore) {
         prefs.putString("f.$siteId.image", item.imageData)
         prefs.putLong("f.$siteId.n", item.texts.size.toLong())
         item.texts.forEachIndexed { i, t -> prefs.putString("f.$siteId.t$i", t) }
+        prefs.putString("f.$siteId.html", item.html ?: "")
         prefs.putString("f.$siteId.page", item.pageUrl)
         prefs.putLong("f.$siteId.aspect", (item.aspect * 1000).toLong())
     }

@@ -92,3 +92,33 @@ test('armado: la web no ve pointerup/touchend (como YouTube); desarmado, sí', a
   await page.mouse.click(p.x, p.y);
   expect(await page.evaluate(() => (window as any).__navigated)).toBe('4');
 });
+
+test('efecto con instantánea: copia la tarjeta capturada (imagen y todos sus textos) en otra', async ({ page }) => {
+  await open(page);
+  await page.evaluate(() => (window as any).OmniWeb.startCapture());
+  const p = await centerCard(page, 4);
+  await page.mouse.click(p.x, p.y);
+  const cap = await page.evaluate(() => (window as any).__cap);
+  expect(cap.html).toContain('Título original 4');
+
+  // «otra visita»: página nueva, mismo motor, configurado con la instantánea
+  await page.goto(PAGE);
+  await page.addScriptTag({ path: BUNDLE });
+  await page.evaluate(
+    (c) => (window as any).OmniWeb.configure({ imageUrl: 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10"><rect width="10" height="10" fill="red"/></svg>', html: c.html, idleMs: 300 }),
+    cap,
+  );
+  for (let i = 1; i <= 8; i++) {
+    await page.evaluate((v) => window.scrollTo(0, v), (1500 * i) / 8);
+    await page.waitForTimeout(30);
+  }
+  await expect.poll(() => page.evaluate(() => !!document.querySelector('[data-omni-forced]'))).toBe(true);
+  const r = await page.evaluate(() => {
+    const el = document.querySelector('[data-omni-forced]')!;
+    const c = el.closest('.card')!;
+    return { h3: c.querySelector('h3')!.textContent, src: c.querySelector('.src')!.textContent, img: (el as HTMLImageElement).getAttribute('src') ?? el.getAttribute('style') };
+  });
+  expect(r.h3).toBe('Título original 4');
+  expect(r.src).toBe('Fuente 4');
+  expect(r.img).toContain('fill=');
+});

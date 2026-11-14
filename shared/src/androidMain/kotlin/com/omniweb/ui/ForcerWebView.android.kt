@@ -25,7 +25,9 @@ import java.net.URL
 
 /** Config → literal JS: `JSONObject.quote` escapa bien comillas, saltos de línea y U+2028. */
 internal fun ForceConfig.toJs(): String =
-    "{imageUrl:${JSONObject.quote(imageUrl)},texts:${JSONArray(texts)},idleMs:$idleMs,mode:'${if (auto) "auto" else "manual"}'}"
+    "{imageUrl:${JSONObject.quote(imageUrl)},texts:${JSONArray(texts)}," +
+        (if (html != null) "html:${JSONObject.quote(html)}," else "") +
+        "idleMs:$idleMs,mode:'${if (auto) "auto" else "manual"}'}"
 
 internal fun parseCapture(json: String): Capture {
     val o = JSONObject(json)
@@ -34,6 +36,7 @@ internal fun parseCapture(json: String): Capture {
         imageUrl = o.getString("imageUrl"),
         imageData = if (o.isNull("imageData")) null else o.getString("imageData"),
         texts = texts,
+        html = if (o.isNull("html")) null else o.optString("html").takeIf { it.isNotEmpty() },
         pageUrl = o.optString("pageUrl"),
         aspect = o.optDouble("aspect", 1.0).toFloat(),
     )

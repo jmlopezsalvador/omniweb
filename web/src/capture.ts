@@ -1,10 +1,12 @@
-import { collectTexts, imageAsDataUrl, mediaUrl } from './apply';
+import { collectTexts, imageAsDataUrl, mediaUrl, snapshotCard } from './apply';
 import { findCandidate } from './candidate';
 
 export interface Capture {
   imageUrl: string;
   imageData: string | null;
   texts: string[];
+  /** Instantánea HTML de la tarjeta (o null si no es clonable). */
+  html: string | null;
   pageUrl: string;
   aspect: number;
 }
@@ -44,6 +46,7 @@ export function createCaptureMode(win: Window, onCapture: (c: Capture) => void):
       imageUrl: url,
       imageData: imageAsDataUrl(cand.media),
       texts: collectTexts(cand.media),
+      html: snapshotCard(cand.media),
       pageUrl: win.location.href,
       aspect: r.height ? r.width / r.height : 1,
     });

@@ -1,4 +1,4 @@
-import { applyImage, applyTexts, applyTitleNear, FORCED_ATTR, normalizeImageUrl } from './apply';
+import { applyImage, applySnapshot, applySnapshotAt, applyTexts, applyTitleNear, FORCED_ATTR, normalizeImageUrl } from './apply';
 import { createCaptureMode } from './capture';
 import { findCandidate } from './candidate';
 import { createIdleDetector } from './idle';
@@ -8,6 +8,8 @@ export interface OmniConfig {
   title?: string;
   /** Textos de la tarjeta capturada (por posición). Si hay, sustituyen a `title`. */
   texts?: string[];
+  /** Instantánea HTML de la tarjeta capturada; tiene prioridad sobre `texts`. */
+  html?: string;
   idleMs?: number;
   /** 'auto': al parar el scroll. 'manual': solo con OmniWeb.trigger(). */
   mode?: 'auto' | 'manual';
@@ -18,7 +20,8 @@ interface Forced {
   card: Element;
   isApplied: () => boolean;
   texts?: string[];
-  textEls?: Element[];
+  textEls?: Node[];
+  html?: string;
   observer: MutationObserver;
 }
 
@@ -34,6 +37,17 @@ function install(win: Window & typeof globalThis) {
 
   function reapply() {
     if (!forced || !cfg || guard) return;
+    if (forced.html && forced.card.isConnected && !forced.card.contains(forced.media)) {
+      // el framework repintó el interior de la tarjeta: volvemos a poner la instantánea
+      guard = true;
+      const s = applySnapshotAt(forced.card, forced.html, cfg.imageUrl);
+      if (s) {
+        forced.media = s.main;
+        forced.isApplied = s.isApplied;
+      }
+      setTimeout(() => (guard = false), 0);
+      return;
+    }
     if (!forced.media.isConnected) {
       // el framework ha repintado: buscamos de nuevo el elemento más centrado
       forced.observer.disconnect();
@@ -65,10 +79,21 @@ function install(win: Window & typeof globalThis) {
       return false;
     }
     guard = true;
+    if (cfg.html) {
+      const snap = applySnapshot(c.media, cfg.html, cfg.imageUrl);
+      if (snap) {
+        const observer = new MutationObserver(() => reapply());
+        observer.observe(snap.container, { attributes: true, childList: true, subtree: true, characterData: true });
+        forced = { media: snap.main, card: snap.container, isApplied: snap.isApplied, html: cfg.html, observer };
+        console.log('[OmniWeb] forzado (instantánea)', snap.main.tagName, Math.round(snap.container.getBoundingClientRect().height) + 'px');
+        setTimeout(() => (guard = false), 0);
+        return true;
+      }
+    }
     const isApplied = applyImage(c.media, cfg.imageUrl);
     let root: Element = c.card;
     let texts: string[] | undefined;
-    let textEls: Element[] | undefined;
+    let textEls: Node[] | undefined;
     if (cfg.texts?.length) {
       const t = applyTexts(c.media, cfg.texts);
       if (t) {

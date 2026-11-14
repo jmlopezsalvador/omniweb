@@ -78,7 +78,7 @@ Si la app lleva una página de «Instrucciones» de cara al usuario final, mante
 - Probar en emulador: `adb install -r app/build/outputs/apk/debug/app-debug.apk`, abrir y hacer swipe; captura con `adb exec-out screencap -p`.
 
 ## Estado de fases
-- **Fase 3 en curso**: YouTube probado (sitio predefinido `YOUTUBE`, m.youtube.com; el modo genérico basta, ver lecciones). Pendiente: Netflix, Amazon, Instagram (uno a uno; pueden exigir login).
+- **Fase 3 en curso**: YouTube y Amazon probados (sitios predefinidos `YOUTUBE`, `AMAZON`; el modo genérico basta, ver lecciones). Pendiente: Netflix e Instagram (uno a uno; exigen login).
 - **Fase 2 hecha**: inicio con lista de sitios (Google Imágenes + añadir URL), «Preparar» (captura: navegar → «Capturar elemento» → tocar → guardar) y «Efecto» (abre la página capturada y fuerza imagen + todos los textos). Un forzaje por sitio.
 - **Fase 1 hecha**: modo genérico probado en Google Imágenes real (emulador) + barra de URL mínima en `App.kt`. La imagen forzada sigue siendo un SVG de prueba (`SPIKE_IMAGE`); el selector real llega en la Fase 2.
 - **Fase 0 hecha**: spike Android con página local (sustituye img/picture/background, título, re-render, auto/manual, reset).
@@ -108,3 +108,12 @@ Si la app lleva una página de «Instrucciones» de cara al usuario final, mante
 - `findTextContainer` sube hasta el contenedor MÁS ALTO que solo contenga ese medio (ignora medios <25% de su área: avatares) y no sea >4× su área.
 - Límites vistos: el avatar del canal no se cambia (queda el de la tarjeta original) y chips como «♪ duración» pueden quedar sueltos. Posible mejora: capturar también imágenes pequeñas de la tarjeta.
 - Teclear en el campo de URL con `adb input text` es poco fiable (se trunca/concatena): `tap`, esperar, Ctrl+A (`keycombination 113 29`), Supr (`keyevent 67`), escribir.
+
+## Lecciones de Amazon y mejoras del motor (Fase 3)
+- **Instantánea de la tarjeta** (`snapshotCard` / `applySnapshot`): al capturar se guarda el HTML interior del contenedor (sin `script`, `on*` ni `id`, con el medio principal marcado `data-omni-main`); el efecto lo reinserta en la tarjeta central con la imagen capturada. La web ya tiene el CSS, así que se ve nativa (precio, insignias, botones). Tiene PRIORIDAD sobre la asignación de textos. Si la tarjeta lleva componentes personalizados DEFINIDOS (`customElements.get`, p. ej. `ytm-*`) no se clona (se vaciarían al insertarse) y se usa la asignación de textos. Límite 200 KB.
+- Textos: la unidad son **nodos de texto** (no elementos): Amazon pone `23<span>.</span>99`. Solo cuentan los visibles (caja ≥2px, sin `display:none`), así se ignoran los textos accesibles fuera de pantalla («4.6 out of 5 stars»). Título = texto de mayor `font-size` entre los largos (≥50% del más largo), porque en tiendas el precio tiene más letra que el nombre.
+- `findTextContainer`: sube hasta 16 niveles (Amazon anida ~9) mientras no haya otra tarjeta (medios ≥25% de su área) y la ALTURA no supere `max(3×medio, 40% pantalla)` (en tarjetas de lista el área no sirve).
+- Capturar el MISMO tipo de tarjeta donde parará el espectador (p. ej. una de la lista, no del carrusel patrocinado): con instantánea importa menos, con texto-por-posición mucho.
+- Herramienta de depuración `web/tools/cdp.mjs "<js>"`: evalúa JS en el WebView del emulador por CDP (no usar Playwright: no soporta WebView). Elige el socket por el PID de `com.omniweb`.
+- Los banners de consentimiento de cookies (Amazon, Google) los decide el usuario: no pulsar «Aceptar/Rechazar» por él en pruebas (el sistema lo bloquea); se puede capturar con el banner presente.
+- Ayudante de pruebas de emulador: leer `uiautomator dump` y `adb shell input tap` por texto; con `PYTHONIOENCODING=utf-8` por los emojis.

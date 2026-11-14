@@ -22,7 +22,7 @@ opcionales por sitio.
   capturado (no se sube ninguna imagen desde la galería: **se fuerza un elemento que ya existe en la propia web**).
 - RF-03 **Modo captura** (preparación): el mago abre un sitio, navega y busca normalmente (p. ej. un término en Google Imágenes) y
   toca el elemento que quiere forzar entre los resultados. La app guarda del elemento: la imagen (descargada y cacheada en local),
-  los textos visibles de su tarjeta (título, fuente…), proporción y tamaño. Queda guardado y listo para el efecto.
+  los textos visibles de su tarjeta (título, fuente…), proporción y tamaño, y una instantánea de la estructura de la tarjeta (HTML limpio) para reinsertarla fielmente en el efecto. Queda guardado y listo para el efecto.
 - RF-03b **Modo efecto**: el mago entra, elige el sitio y la app abre la web ya preparada; al parar el espectador el scroll se
   sustituye el elemento central por el capturado (imagen + textos), con el aspecto de contenido original.
 - RF-04 Modo actuación: detecta parada del scroll (debounce configurable 300–600 ms + fin de inercia) y sustituye el elemento más
