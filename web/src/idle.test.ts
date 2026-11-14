@@ -17,6 +17,18 @@ describe('createIdleDetector', () => {
     d.disarm();
   });
 
+  it('ignora el scroll de contenedores internos', () => {
+    const onIdle = vi.fn();
+    const d = createIdleDetector(window, { idleMs: 300, onIdle });
+    d.arm();
+    const inner = document.createElement('div');
+    document.body.appendChild(inner);
+    inner.dispatchEvent(new Event('scroll'));
+    vi.advanceTimersByTime(2000);
+    expect(onIdle).not.toHaveBeenCalled();
+    d.disarm();
+  });
+
   it('dispara una vez tras idleMs sin scroll', () => {
     const onIdle = vi.fn();
     const d = createIdleDetector(window, { idleMs: 300, onIdle });

@@ -78,4 +78,13 @@ Si la app lleva una página de «Instrucciones» de cara al usuario final, mante
 - Probar en emulador: `adb install -r app/build/outputs/apk/debug/app-debug.apk`, abrir y hacer swipe; captura con `adb exec-out screencap -p`.
 
 ## Estado de fases
+- **Fase 1 hecha (pendiente de commit)**: modo genérico probado en Google Imágenes real (emulador) + barra de URL mínima en `App.kt`. La imagen forzada sigue siendo un SVG de prueba (`SPIKE_IMAGE`); el selector real llega en la Fase 2.
 - **Fase 0 hecha**: spike Android con página local (sustituye img/picture/background, título, re-render, auto/manual, reset).
+
+## Lecciones de webs reales (Android)
+- Sin `INTERNET` en el manifiesto el WebView da `net::ERR_CACHE_MISS`.
+- El host inyecta el bundle 2 veces (onPageStarted + onPageFinished): el motor es idempotente (`window.OmniWeb` ya existe → no reinstala).
+- Solo cuenta el scroll del documento; el de contenedores internos (p. ej. diálogo de cookies de Google) daba falsos disparos.
+- Google Imágenes: la tarjeta con `<img>` no contiene el título; `applyTitleNear` sube hasta un contenedor con texto sin llegar a la rejilla (más de una imagen).
+- El primer arranque del WebView en el emulador tarda ~7 s y Google pide consentimiento de cookies: el mago debe aceptarlo antes de la actuación.
+- Ver el log del motor: `adb logcat -d | grep "OmniWeb\]"`.

@@ -36,6 +36,13 @@ actual fun ForcerWebView(url: String, config: ForceConfig, modifier: Modifier) {
                         view.evaluateJavascript("$bundle;OmniWeb.configure(${config.toJs()});", null)
                 }
                 loadUrl(url)
+                tag = url // última URL pedida desde la barra
+            }
+        },
+        update = { wv ->
+            if (wv.tag != url) {
+                wv.tag = url
+                wv.loadUrl(url)
             }
         },
     )

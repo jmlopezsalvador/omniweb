@@ -1,4 +1,4 @@
-import { applyImage, applyTitle, FORCED_ATTR, normalizeImageUrl } from './apply';
+import { applyImage, applyTitleNear, FORCED_ATTR, normalizeImageUrl } from './apply';
 import { findCandidate } from './candidate';
 import { createIdleDetector } from './idle';
 
@@ -15,10 +15,13 @@ interface Forced {
   card: Element;
   isApplied: () => boolean;
   title?: string;
+  titleEl?: Element;
   observer: MutationObserver;
 }
 
 function install(win: Window & typeof globalThis) {
+  // El host puede inyectar el bundle varias veces (onPageStarted + onPageFinished): una sola instancia.
+  if ((win as unknown as { OmniWeb?: unknown }).OmniWeb) return;
   const doc = win.document;
   let cfg: OmniConfig | null = null;
   let forced: Forced | null = null;
@@ -38,7 +41,11 @@ function install(win: Window & typeof globalThis) {
     if (!forced.isApplied()) {
       guard = true;
       forced.isApplied = applyImage(forced.media, cfg.imageUrl);
-      if (forced.title) applyTitle(forced.card, forced.title);
+      setTimeout(() => (guard = false), 0);
+    }
+    if (forced.title && forced.titleEl && forced.titleEl.textContent !== forced.title) {
+      guard = true;
+      forced.titleEl.textContent = forced.title;
       setTimeout(() => (guard = false), 0);
     }
   }
@@ -46,13 +53,18 @@ function install(win: Window & typeof globalThis) {
   function trigger(): boolean {
     if (!cfg || forced) return false;
     const c = findCandidate(doc, win.innerWidth / 2, win.innerHeight / 2);
-    if (!c) return false;
+    if (!c) {
+      console.log('[OmniWeb] sin candidato en el centro');
+      return false;
+    }
     guard = true;
     const isApplied = applyImage(c.media, cfg.imageUrl);
-    if (cfg.title) applyTitle(c.card, cfg.title);
+    const t = cfg.title ? applyTitleNear(c.media, cfg.title) : null;
     const observer = new MutationObserver(() => reapply());
-    observer.observe(c.card, { attributes: true, childList: true, subtree: true, characterData: true });
-    forced = { media: c.media, card: c.card, isApplied, title: cfg.title, observer };
+    const root = t?.container ?? c.card;
+    observer.observe(root, { attributes: true, childList: true, subtree: true, characterData: true });
+    forced = { media: c.media, card: root, isApplied, title: cfg.title, titleEl: t?.target, observer };
+    console.log('[OmniWeb] forzado', c.media.tagName, (c.media as HTMLElement).className || '', 'en tarjeta', c.card.tagName, Math.round(c.card.getBoundingClientRect().height) + 'px');
     setTimeout(() => (guard = false), 0);
     // si el padre desaparece (re-render), observamos el documento para volver a colocar
     new MutationObserver((_, self) => {

@@ -33,7 +33,11 @@ export function createIdleDetector(win: Window, opts: IdleOptions): IdleDetector
     }, idleMs);
   };
 
-  const onScroll = () => {
+  // Solo cuenta el scroll de la página; el de contenedores internos (diálogos, carruseles) no es el «scroll infinito».
+  const onScroll = (e: Event) => {
+    const t = e.target as Node | null;
+    const d = win.document;
+    if (t && t.nodeType === 1 && t !== d.scrollingElement && t !== d.documentElement && t !== d.body) return;
     scrolled = true;
     schedule();
   };

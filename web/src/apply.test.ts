@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { applyImage, applyTitle, FORCED_ATTR, normalizeImageUrl } from './apply';
+import { applyImage, applyTitle, applyTitleNear, FORCED_ATTR, normalizeImageUrl } from './apply';
 
 describe('normalizeImageUrl', () => {
   it('codifica espacios, comas y comillas del cuerpo de un data: URL', () => {
@@ -77,5 +77,22 @@ describe('applyTitle', () => {
   it('devuelve false si no hay título', () => {
     document.body.innerHTML = '<div><img src="a.jpg"></div>';
     expect(applyTitle(document.querySelector('div')!, 'Nuevo')).toBe(false);
+  });
+});
+
+describe('applyTitleNear', () => {
+  it('cambia el texto hermano (estilo Google Imágenes) sin tocar otras tarjetas', () => {
+    document.body.innerHTML =
+      '<div id="grid"><div class="c"><a><img src="a.jpg"></a><div><div>Título viejo</div><div>Fuente</div></div></div>' +
+      '<div class="c"><a><img src="b.jpg"></a><div><div>Otra</div></div></div></div>';
+    const img = document.querySelector('img')!;
+    const r = applyTitleNear(img, 'Nuevo')!;
+    expect(r.target.textContent).toBe('Nuevo');
+    expect(document.querySelectorAll('.c')[1].textContent).toBe('Otra');
+    expect(document.querySelector('.c')!.textContent).toContain('Fuente');
+  });
+  it('no sube hasta la rejilla si solo hay imágenes', () => {
+    document.body.innerHTML = '<div><div><img src="a.jpg"></div><div><img src="b.jpg"></div></div>';
+    expect(applyTitleNear(document.querySelector('img')!, 'X')).toBeNull();
   });
 });

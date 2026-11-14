@@ -75,3 +75,33 @@ export function applyTitle(card: Element, title: string): boolean {
   card.querySelectorAll('img').forEach((i) => i.hasAttribute('alt') && i.setAttribute('alt', title));
   return true;
 }
+
+/**
+ * Título de una tarjeta cuando no hay ancestro claro: sube desde el medio hasta un contenedor con texto propio
+ * (sin llegar a uno que contenga varias imágenes = la rejilla entera) y cambia el primer texto «hoja» en orden de documento.
+ * Devuelve el contenedor y el elemento cambiado, o null.
+ */
+export function applyTitleNear(media: Element, title: string): { container: Element; target: Element } | null {
+  let c: Element | null = media.parentElement;
+  for (let depth = 0; c && depth < 6 && c !== c.ownerDocument.body; depth++, c = c.parentElement) {
+    if (c.querySelectorAll('img,video').length > 1) return null; // ya es la rejilla
+    const heading = Array.from(c.querySelectorAll(TITLE_SELECTOR)).find(
+      (n) => !n.contains(media) && !n.querySelector(TITLE_SELECTOR) && (n.textContent ?? '').trim().length > 0,
+    );
+    const leaf =
+      heading ??
+      Array.from(c.querySelectorAll('*')).find(
+        (n) =>
+          n.children.length === 0 &&
+          !n.contains(media) &&
+          !/^(script|style|svg|path|button|img|video|source)$/i.test(n.tagName) &&
+          (n.textContent ?? '').trim().length >= 3,
+      );
+    if (leaf) {
+      leaf.textContent = title;
+      c.querySelectorAll('img').forEach((i) => i.hasAttribute('alt') && i.setAttribute('alt', title));
+      return { container: c, target: leaf };
+    }
+  }
+  return null;
+}
