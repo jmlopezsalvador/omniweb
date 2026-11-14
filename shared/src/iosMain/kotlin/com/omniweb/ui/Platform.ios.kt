@@ -6,9 +6,24 @@ import androidx.compose.runtime.Composable
 import kotlinx.cinterop.ExperimentalForeignApi
 import platform.Foundation.NSUserDefaults
 
-/** iOS: sin comportamiento especial (la barra de estado y el indicador de inicio se ocultan en ContentView.swift). */
+/** iOS: la barra de estado y el indicador de inicio se ocultan en ContentView.swift (Fase 4: inmersivo + idleTimerDisabled). */
 @Composable
-actual fun SystemBarsEffect() {}
+actual fun SystemBarsEffect(immersive: Boolean) {}
+
+/** iOS: pendiente (Fase 4): no hay botón de volumen programable sin APIs privadas; se usará otro gesto. */
+@Composable
+actual fun VolumeKeyEffect(enabled: Boolean, onPress: () -> Unit) {}
+
+/** iOS: pendiente (Fase 4): WKWebsiteDataStore.defaultDataStore().removeData(...). */
+actual fun clearBrowsingData() {}
+
+/** iOS: de momento en NSUserDefaults (Fase 4: ficheros en Application Support). */
+class UserDefaultsBlobStore : BlobStore {
+    private val d = NSUserDefaults.standardUserDefaults
+    override fun read(name: String): String? = d.stringForKey("blob.$name")
+    override fun write(name: String, data: String) = d.setObject(data, "blob.$name")
+    override fun delete(name: String) = d.removeObjectForKey("blob.$name")
+}
 
 class UserDefaultsStore : KeyValueStore {
     private val d = NSUserDefaults.standardUserDefaults

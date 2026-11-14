@@ -58,3 +58,11 @@ opcionales por sitio.
 ## 7. Preguntas abiertas
 - Icono: provisional (globo de navegador generado); sustituir por `data/icon.png` cuando el usuario lo aporte.
 - Idiomas de la interfaz (se asume español).
+
+## 8. Estado respecto a los requisitos (Android)
+- RF-01: URL ocultable en Preparar (hecho); user agent: móvil / escritorio por sitio (hecho).
+- RF-02/03/03b: sitios, captura (imagen + textos + instantánea) y efecto (hecho). Un forzaje por sitio.
+- RF-04/05: parada de scroll configurable (300/450/600 ms); disparo automático o manual con esquina inferior derecha / volumen (hecho).
+- RF-06: «Borrar rastros», modo práctica y «mostrar la web real» desde el menú oculto (hecho).
+- RF-07: todo local (hecho).
+- Pendiente: presets múltiples (caso 5), Netflix e Instagram (login), iOS (Fase 4), icono definitivo y requisitos de tienda.

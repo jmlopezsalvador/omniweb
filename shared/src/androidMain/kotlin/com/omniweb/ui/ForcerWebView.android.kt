@@ -4,6 +4,7 @@ import android.annotation.SuppressLint
 import android.graphics.Bitmap
 import android.util.Base64
 import android.webkit.JavascriptInterface
+import android.webkit.WebResourceRequest
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import androidx.activity.compose.BackHandler
@@ -50,9 +51,11 @@ actual fun ForcerWebView(
     captureMode: Boolean,
     armed: Boolean,
     onCapture: (Capture) -> Unit,
-    onExit: () -> Unit,
+    onExit: (() -> Unit)?,
     modifier: Modifier,
     navId: Int,
+    desktop: Boolean,
+    triggerNonce: Int,
 ) {
     val latestCapture by rememberUpdatedState(onCapture)
     val latestArmed by rememberUpdatedState(armed)
@@ -66,9 +69,14 @@ actual fun ForcerWebView(
         }
     }
 
+    // Disparo manual oculto (esquina / volumen): el motor ya sabe si hay un candidato y si ya forzó
+    LaunchedEffect(triggerNonce, webView) {
+        if (triggerNonce > 0) webView?.evaluateJavascript("window.OmniWeb&&OmniWeb.trigger()", null)
+    }
+
     BackHandler {
         val wv = webView
-        if (captureMode && wv != null && canGoBack) wv.goBack() else onExit()
+        if (wv != null && canGoBack) wv.goBack() else onExit?.invoke()
     }
 
     AndroidView(
@@ -80,6 +88,11 @@ actual fun ForcerWebView(
                 WebView.setWebContentsDebuggingEnabled(true) // chrome://inspect en depuración
                 settings.javaScriptEnabled = true
                 settings.domStorageEnabled = true
+                if (desktop) {
+                    settings.userAgentString = DESKTOP_UA
+                    settings.useWideViewPort = true
+                    settings.loadWithOverviewMode = true
+                }
                 // Puente del modo captura. Solo se atiende si estamos en captura (una página no puede forzar un guardado).
                 addJavascriptInterface(object {
                     @JavascriptInterface
@@ -90,6 +103,9 @@ actual fun ForcerWebView(
                     }
                 }, "OmniBridge")
                 webViewClient = object : WebViewClient() {
+                    // Esquemas que abrirían otra app (intent://, market://, youtube://…): se ignoran
+                    override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean =
+                        isExternalScheme(request.url.toString())
                     // Inyectar lo antes posible; se repite en onPageFinished por si la página tardó en montar el DOM.
                     override fun onPageStarted(view: WebView, u: String?, favicon: Bitmap?) = inject(view)
                     override fun onPageFinished(view: WebView, u: String?) = inject(view)
@@ -119,6 +135,8 @@ actual fun ForcerWebView(
     )
 }
 
+private const val DESKTOP_UA =
+    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
 private const val MAX_IMAGE_BYTES = 8 * 1024 * 1024
 private const val DOWNLOAD_UA =
     "Mozilla/5.0 (Linux; Android 14; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Mobile Safari/537.36"

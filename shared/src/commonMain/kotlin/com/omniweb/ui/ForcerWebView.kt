@@ -21,7 +21,9 @@ data class ForceConfig(
  * - `captureMode`: pantalla de preparación (hay puente nativo). Solo cuando `armed` es true el toque NO activa la web y el
  *   motor entrega el elemento tocado por `onCapture`; con `armed` false se navega y se busca con normalidad.
  * - si no, aplica `config` (modo efecto).
- * La tecla atrás navega hacia atrás en captura y, si no hay historial (o en efecto), llama a `onExit`.
+ * La tecla atrás navega hacia atrás y, si no hay historial, llama a `onExit` (null = no hace nada: en el efecto el
+ * espectador no debe poder salir de la pantalla).
+ * Se bloquean las URL que abrirían otra app (`isExternalScheme`).
  * Android: `WebView`. iOS: `WKWebView` (Fase 4).
  */
 @Composable
@@ -31,10 +33,14 @@ expect fun ForcerWebView(
     captureMode: Boolean,
     armed: Boolean,
     onCapture: (Capture) -> Unit,
-    onExit: () -> Unit,
+    onExit: (() -> Unit)?,
     modifier: Modifier = Modifier,
     /** Cambiarlo fuerza recargar `url` aunque sea igual que la anterior (botón «Ir»). */
     navId: Int = 0,
+    /** Pide la web de escritorio (user agent de PC). Se aplica al crear el navegador. */
+    desktop: Boolean = false,
+    /** Cada incremento dispara el forzaje a mano (`OmniWeb.trigger()`): gesto oculto en el efecto. */
+    triggerNonce: Int = 0,
 )
 
 /** Descarga una imagen y la devuelve como data: URL (null si falla). Android: HttpURLConnection. */

@@ -14,9 +14,11 @@ actual fun ForcerWebView(
     captureMode: Boolean,
     armed: Boolean,
     onCapture: (Capture) -> Unit,
-    onExit: () -> Unit,
+    onExit: (() -> Unit)?,
     modifier: Modifier,
     navId: Int,
+    desktop: Boolean,
+    triggerNonce: Int,
 ) {
     Box(modifier, contentAlignment = Alignment.Center) { Text("Navegador iOS: Fase 4") }
 }

@@ -78,6 +78,7 @@ Si la app lleva una página de «Instrucciones» de cara al usuario final, mante
 - Probar en emulador: `adb install -r app/build/outputs/apk/debug/app-debug.apk`, abrir y hacer swipe; captura con `adb exec-out screencap -p`.
 
 ## Estado de fases
+- **Fase 5 (parte Android) hecha**: reset de datos y modo práctica, disparo manual oculto, bloqueo de apps externas, modo inmersivo, ajustes por sitio, gestión de sitios, imágenes en ficheros. Falta lo equivalente en iOS (Fase 4).
 - **Fase 3 en curso**: YouTube y Amazon probados (sitios predefinidos `YOUTUBE`, `AMAZON`; el modo genérico basta, ver lecciones). Pendiente: Netflix e Instagram (uno a uno; exigen login).
 - **Fase 2 hecha**: inicio con lista de sitios (Google Imágenes + añadir URL), «Preparar» (captura: navegar → «Capturar elemento» → tocar → guardar) y «Efecto» (abre la página capturada y fuerza imagen + todos los textos). Un forzaje por sitio.
 - **Fase 1 hecha**: modo genérico probado en Google Imágenes real (emulador) + barra de URL mínima en `App.kt`. La imagen forzada sigue siendo un SVG de prueba (`SPIKE_IMAGE`); el selector real llega en la Fase 2.
@@ -117,3 +118,11 @@ Si la app lleva una página de «Instrucciones» de cara al usuario final, mante
 - Herramienta de depuración `web/tools/cdp.mjs "<js>"`: evalúa JS en el WebView del emulador por CDP (no usar Playwright: no soporta WebView). Elige el socket por el PID de `com.omniweb`.
 - Los banners de consentimiento de cookies (Amazon, Google) los decide el usuario: no pulsar «Aceptar/Rechazar» por él en pruebas (el sistema lo bloquea); se puede capturar con el banner presente.
 - Ayudante de pruebas de emulador: leer `uiautomator dump` y `adb shell input tap` por texto; con `PYTHONIOENCODING=utf-8` por los emojis.
+
+## Fase 5 en Android: efecto, gestos y datos
+- **Efecto** (`EffectScreen`): web a pantalla completa, inmersivo (`SystemBarsEffect(immersive)`: oculta barras y `keepScreenOn`). «Atrás» solo navega por la web, no sale. Gestos ocultos: toque en la esquina inferior DERECHA = fuerza ahora; botón de volumen = lo mismo (`VolumeKeyEffect`, `MainActivity.onKeyDown` → `VolumeKeyBus`); pulsación larga en la esquina superior IZQUIERDA = menú (reiniciar, mostrar web real sin forzar, salir). Las esquinas (`HiddenCorner`) deben TRAGARSE el contacto desde el `down`; si solo consumen el `up`, el toque llega también a la web.
+- **Ajustes por sitio** (`SiteSettings`: auto/manual, `idleMs` 300/450/600, escritorio) en `ForceStore`; preparar y efecto usan los mismos (capturar con el mismo user agent que se usará). **Modo práctica**: al salir del efecto `clearBrowsingData()` (cookies, WebStorage, caché, historial). Botón «Borrar rastros» en inicio. Ojo: borrar cookies reabre los avisos de consentimiento.
+- **Bloqueo de apps externas**: `shouldOverrideUrlLoading` ignora cualquier esquema que no sea http(s)/about/data/blob/file/javascript (`isExternalScheme`, con tests).
+- **Almacenamiento**: `ForceStore(prefs, blobs)`. Imagen y HTML de la tarjeta van a `BlobStore` (Android `FileBlobStore`: `filesDir/blobs`); lee también el formato antiguo en preferencias. Se pueden borrar forzajes y quitar sitios añadidos (no los predefinidos).
+- Expects nuevos en `Platform.kt`: `SystemBarsEffect(immersive)`, `VolumeKeyEffect`, `clearBrowsingData`. iOS los tiene como stubs: Fase 4 debe implementarlos (`WKWebsiteDataStore.removeData`, idleTimerDisabled, y un gesto alternativo al volumen: iOS no permite capturar los botones de volumen sin APIs privadas).
+- Pruebas en emulador: pulsación larga con `adb shell input swipe x y x y 1500`; volumen con `keyevent 24/25`; user agent con `node tools/cdp.mjs "navigator.userAgent"`.
