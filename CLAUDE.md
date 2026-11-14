@@ -78,7 +78,8 @@ Si la app lleva una página de «Instrucciones» de cara al usuario final, mante
 - Probar en emulador: `adb install -r app/build/outputs/apk/debug/app-debug.apk`, abrir y hacer swipe; captura con `adb exec-out screencap -p`.
 
 ## Estado de fases
-- **Fase 1 hecha (pendiente de commit)**: modo genérico probado en Google Imágenes real (emulador) + barra de URL mínima en `App.kt`. La imagen forzada sigue siendo un SVG de prueba (`SPIKE_IMAGE`); el selector real llega en la Fase 2.
+- **Fase 2 hecha (pendiente de commit)**: inicio con lista de sitios (Google Imágenes + añadir URL), «Preparar» (captura: navegar → «Capturar elemento» → tocar → guardar) y «Efecto» (abre la página capturada y fuerza imagen + todos los textos). Un forzaje por sitio.
+- **Fase 1 hecha**: modo genérico probado en Google Imágenes real (emulador) + barra de URL mínima en `App.kt`. La imagen forzada sigue siendo un SVG de prueba (`SPIKE_IMAGE`); el selector real llega en la Fase 2.
 - **Fase 0 hecha**: spike Android con página local (sustituye img/picture/background, título, re-render, auto/manual, reset).
 
 ## Lecciones de webs reales (Android)
@@ -88,3 +89,13 @@ Si la app lleva una página de «Instrucciones» de cara al usuario final, mante
 - Google Imágenes: la tarjeta con `<img>` no contiene el título; `applyTitleNear` sube hasta un contenedor con texto sin llegar a la rejilla (más de una imagen).
 - El primer arranque del WebView en el emulador tarda ~7 s y Google pide consentimiento de cookies: el mago debe aceptarlo antes de la actuación.
 - Ver el log del motor: `adb logcat -d | grep "OmniWeb\]"`.
+
+## Modo captura y efecto (Fase 2)
+- Concepto: NO se sube ninguna imagen; se fuerza un elemento que ya existe en la web (SPEC RF-02/03/03b). Un forzaje por sitio, el último capturado.
+- El motor solo traga los toques cuando la captura está **armada** (botón «Capturar elemento»); si no, no se podría navegar ni cerrar cookies. `ForcerWebView(captureMode, armed, ...)`.
+- Puente Android: `addJavascriptInterface(..., "OmniBridge")` → `onCapture(json)`; se ignora si `!captureMode || !armed`. iOS usará `WKScriptMessageHandler` con el mismo JSON.
+- La captura guarda: imagen (data: URL; si el canvas está «tainted» por CORS la descarga Kotlin con `fetchImageDataUrl`), textos hoja de la tarjeta por posición (`findTextContainer`, misma función al capturar y al aplicar) y aspecto.
+- Almacén: `ForceStore` sobre `KeyValueStore` (SharedPreferences/UserDefaults). La imagen va como data: URL en una preferencia: vale para miniaturas; si se capturan imágenes grandes (>1–2 MB) mover a ficheros.
+- `navId` en `ForcerWebView`: el botón «Ir» recarga aunque la URL sea la misma.
+- Pruebas en emulador con `uiautomator`: tocar por texto, p. ej. un script que lea `uiautomator dump` y haga `adb shell input tap`.
+- Pendiente/limitaciones conocidas: la imagen se recorta con `object-fit: cover` al hueco de la tarjeta (no se reajusta la proporción); sin borrar/editar sitios; sin gesto oculto ni reset de trazas (Fase 5).

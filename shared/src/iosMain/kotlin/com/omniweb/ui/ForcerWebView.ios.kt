@@ -6,8 +6,20 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 
-/** iOS: pendiente (Fase 4). Irá con `WKWebView` + `WKUserScript` + el mismo bundle JS. */
+/** iOS: pendiente (Fase 4). Irá con `WKWebView` + `WKUserScript` + `WKScriptMessageHandler` y el mismo bundle JS. */
 @Composable
-actual fun ForcerWebView(url: String, config: ForceConfig, modifier: Modifier) {
+actual fun ForcerWebView(
+    url: String,
+    config: ForceConfig?,
+    captureMode: Boolean,
+    armed: Boolean,
+    onCapture: (Capture) -> Unit,
+    onExit: () -> Unit,
+    modifier: Modifier,
+    navId: Int,
+) {
     Box(modifier, contentAlignment = Alignment.Center) { Text("Navegador iOS: Fase 4") }
 }
+
+/** iOS: pendiente (Fase 4), con NSURLSession. */
+actual suspend fun fetchImageDataUrl(url: String, referer: String): String? = if (url.startsWith("data:")) url else null

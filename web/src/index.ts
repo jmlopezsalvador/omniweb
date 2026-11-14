@@ -1,10 +1,13 @@
-import { applyImage, applyTitleNear, FORCED_ATTR, normalizeImageUrl } from './apply';
+import { applyImage, applyTexts, applyTitleNear, FORCED_ATTR, normalizeImageUrl } from './apply';
+import { createCaptureMode } from './capture';
 import { findCandidate } from './candidate';
 import { createIdleDetector } from './idle';
 
 export interface OmniConfig {
   imageUrl: string;
   title?: string;
+  /** Textos de la tarjeta capturada (por posición). Si hay, sustituyen a `title`. */
+  texts?: string[];
   idleMs?: number;
   /** 'auto': al parar el scroll. 'manual': solo con OmniWeb.trigger(). */
   mode?: 'auto' | 'manual';
@@ -14,8 +17,8 @@ interface Forced {
   media: Element;
   card: Element;
   isApplied: () => boolean;
-  title?: string;
-  titleEl?: Element;
+  texts?: string[];
+  textEls?: Element[];
   observer: MutationObserver;
 }
 
@@ -43,10 +46,14 @@ function install(win: Window & typeof globalThis) {
       forced.isApplied = applyImage(forced.media, cfg.imageUrl);
       setTimeout(() => (guard = false), 0);
     }
-    if (forced.title && forced.titleEl && forced.titleEl.textContent !== forced.title) {
-      guard = true;
-      forced.titleEl.textContent = forced.title;
-      setTimeout(() => (guard = false), 0);
+    if (forced.texts && forced.textEls) {
+      const texts = forced.texts;
+      const stale = forced.textEls.some((el, i) => el.textContent !== texts[i]);
+      if (stale) {
+        guard = true;
+        forced.textEls.forEach((el, i) => (el.textContent = texts[i]));
+        setTimeout(() => (guard = false), 0);
+      }
     }
   }
 
@@ -59,11 +66,27 @@ function install(win: Window & typeof globalThis) {
     }
     guard = true;
     const isApplied = applyImage(c.media, cfg.imageUrl);
-    const t = cfg.title ? applyTitleNear(c.media, cfg.title) : null;
+    let root: Element = c.card;
+    let texts: string[] | undefined;
+    let textEls: Element[] | undefined;
+    if (cfg.texts?.length) {
+      const t = applyTexts(c.media, cfg.texts);
+      if (t) {
+        root = t.container;
+        texts = cfg.texts;
+        textEls = t.targets;
+      }
+    } else if (cfg.title) {
+      const t = applyTitleNear(c.media, cfg.title);
+      if (t) {
+        root = t.container;
+        texts = [cfg.title];
+        textEls = [t.target];
+      }
+    }
     const observer = new MutationObserver(() => reapply());
-    const root = t?.container ?? c.card;
     observer.observe(root, { attributes: true, childList: true, subtree: true, characterData: true });
-    forced = { media: c.media, card: root, isApplied, title: cfg.title, titleEl: t?.target, observer };
+    forced = { media: c.media, card: root, isApplied, texts, textEls, observer };
     console.log('[OmniWeb] forzado', c.media.tagName, (c.media as HTMLElement).className || '', 'en tarjeta', c.card.tagName, Math.round(c.card.getBoundingClientRect().height) + 'px');
     setTimeout(() => (guard = false), 0);
     // si el padre desaparece (re-render), observamos el documento para volver a colocar
@@ -81,7 +104,19 @@ function install(win: Window & typeof globalThis) {
     idle.arm();
   }
 
+  const capture = createCaptureMode(win, (c) => {
+    const bridge = (win as unknown as { OmniBridge?: { onCapture(json: string): void } }).OmniBridge;
+    bridge?.onCapture(JSON.stringify(c));
+  });
+
   const api = {
+    startCapture() {
+      api.disarm();
+      capture.start();
+    },
+    endCapture() {
+      capture.stop();
+    },
     configure(c: OmniConfig) {
       cfg = { mode: 'auto', idleMs: 450, ...c, imageUrl: normalizeImageUrl(c.imageUrl) };
       idle.setIdleMs(cfg.idleMs!);

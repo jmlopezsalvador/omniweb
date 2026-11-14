@@ -105,3 +105,86 @@ export function applyTitleNear(media: Element, title: string): { container: Elem
   }
   return null;
 }
+
+const NON_TEXT = /^(script|style|svg|path|button|img|video|source|noscript)$/i;
+
+/** Textos «hoja» (sin hijos elemento) de un contenedor, en orden de documento, sin contar el propio medio. */
+export function textLeaves(container: Element, media: Element): Element[] {
+  return Array.from(container.querySelectorAll('*')).filter(
+    (n) =>
+      n.children.length === 0 &&
+      !n.contains(media) &&
+      !NON_TEXT.test(n.tagName) &&
+      !n.closest('button,[role="button"]') &&
+      (n.textContent ?? '').trim().length >= 1,
+  );
+}
+
+/**
+ * Contenedor «tarjeta» de un medio con sus textos: sube hasta el primer ancestro con texto, sin llegar a uno que
+ * contenga varias imágenes (la rejilla). Capturar y aplicar usan EXACTAMENTE esta función para que los índices coincidan.
+ */
+export function findTextContainer(media: Element): { container: Element; leaves: Element[] } | null {
+  let c: Element | null = media.parentElement;
+  for (let depth = 0; c && depth < 6 && c !== c.ownerDocument.body; depth++, c = c.parentElement) {
+    if (c.querySelectorAll('img,video').length > 1) return null;
+    const leaves = textLeaves(c, media);
+    if (leaves.length) return { container: c, leaves };
+  }
+  return null;
+}
+
+export function collectTexts(media: Element): string[] {
+  return (findTextContainer(media)?.leaves ?? []).map((n) => (n.textContent ?? '').trim());
+}
+
+/** Sustituye los textos de la tarjeta, uno a uno por posición. Devuelve contenedor y elementos cambiados. */
+export function applyTexts(media: Element, texts: string[]): { container: Element; targets: Element[] } | null {
+  const r = findTextContainer(media);
+  if (!r) return null;
+  const targets: Element[] = [];
+  r.leaves.forEach((leaf, i) => {
+    if (i < texts.length) {
+      leaf.textContent = texts[i];
+      targets.push(leaf);
+    }
+  });
+  r.container.querySelectorAll('img').forEach((img) => img.hasAttribute('alt') && texts[0] && img.setAttribute('alt', texts[0]));
+  return { container: r.container, targets };
+}
+
+/** URL de la imagen que muestra un medio (img/video poster/background-image), absoluta. */
+export function mediaUrl(el: Element): string | null {
+  const kind = mediaKind(el);
+  let u: string | null = null;
+  if (kind === 'img') u = (el as HTMLImageElement).currentSrc || el.getAttribute('src');
+  else if (kind === 'video') u = el.getAttribute('poster');
+  else if (kind === 'bg') {
+    const m = /url\((['"]?)(.*?)\1\)/.exec(el.ownerDocument.defaultView!.getComputedStyle(el).backgroundImage);
+    u = m ? m[2] : null;
+  }
+  if (!u) return null;
+  try {
+    return u.startsWith('data:') ? u : new URL(u, el.ownerDocument.baseURI).href;
+  } catch {
+    return u;
+  }
+}
+
+/** Intenta obtener los bytes de la imagen ya cargada (canvas). Devuelve null si el canvas queda «tainted» por CORS. */
+export function imageAsDataUrl(el: Element): string | null {
+  const u = mediaUrl(el);
+  if (u?.startsWith('data:')) return u;
+  if (el.tagName.toLowerCase() !== 'img') return null;
+  const img = el as HTMLImageElement;
+  if (!img.complete || !img.naturalWidth) return null;
+  try {
+    const c = el.ownerDocument.createElement('canvas');
+    c.width = img.naturalWidth;
+    c.height = img.naturalHeight;
+    c.getContext('2d')!.drawImage(img, 0, 0);
+    return c.toDataURL('image/jpeg', 0.92);
+  } catch {
+    return null;
+  }
+}

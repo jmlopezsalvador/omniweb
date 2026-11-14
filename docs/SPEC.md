@@ -18,8 +18,13 @@ opcionales por sitio.
 
 ## 3. Requisitos funcionales (MVP)
 - RF-01 Navegador in-app con barra de URL ocultable y user agent móvil configurable.
-- RF-02 Biblioteca de forzajes: nombre, URL, imagen (galería o cámara), título opcional, ajustes. **Una imagen por forzaje.**
-- RF-03 Modo configuración con selector de elementos: el mago toca una miniatura de ejemplo; se guarda selector, tamaño y proporción.
+- RF-02 **Sitios** y **forzajes**. El mago tiene una lista de webs añadidas (Google Imágenes, YouTube…). Un forzaje = sitio + elemento
+  capturado (no se sube ninguna imagen desde la galería: **se fuerza un elemento que ya existe en la propia web**).
+- RF-03 **Modo captura** (preparación): el mago abre un sitio, navega y busca normalmente (p. ej. un término en Google Imágenes) y
+  toca el elemento que quiere forzar entre los resultados. La app guarda del elemento: la imagen (descargada y cacheada en local),
+  los textos visibles de su tarjeta (título, fuente…), proporción y tamaño. Queda guardado y listo para el efecto.
+- RF-03b **Modo efecto**: el mago entra, elige el sitio y la app abre la web ya preparada; al parar el espectador el scroll se
+  sustituye el elemento central por el capturado (imagen + textos), con el aspecto de contenido original.
 - RF-04 Modo actuación: detecta parada del scroll (debounce configurable 300–600 ms + fin de inercia) y sustituye el elemento más
   centrado por la imagen, adaptando tamaño. Opcional: cambiar título/texto asociado.
 - RF-05 Disparo **automático** al parar o **manual** con gesto oculto (toque en esquina, botón de volumen); configurable por forzaje.
@@ -39,7 +44,7 @@ opcionales por sitio.
 ## 5. Fases
 - **0** Spike Android con página HTML local de scroll infinito.
 - **1** Modo genérico en Google Imágenes.
-- **2** Selector de elementos + biblioteca de forzajes.
+- **2** Modo captura (tocar un elemento de la web y guardarlo) + lista de sitios y forzajes + modo efecto.
 - **3** Perfiles YouTube, Netflix, Amazon, Instagram.
 - **4** Versión iOS (build en Actions, con permiso del usuario).
 - **5** Pulido: gestos ocultos, borrado de trazas, rendimiento.
