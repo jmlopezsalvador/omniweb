@@ -16,6 +16,7 @@ Repo: https://github.com/jmlopezsalvador/omniweb.git · paquete `com.omniweb` ·
 | `data/` | Material de referencia que aporta el usuario (capturas, icono, recursos). Se puede leer. |
 | `data/android_build/` | APK descargados/generados. No se versionan. |
 | `data/ios_build/` | `.ipa` descargado de Actions. No se versiona. |
+| `web/` | Motor JS (TypeScript → esbuild → `web/dist/omniweb.js`, IIFE es2019) + página de pruebas `web/test/page.html`. `dist/` SÍ se versiona (Gradle lo empaqueta como assets de Android sin necesitar Node). |
 | `ignore/` | **Ignorar por completo** (ver reglas). |
 
 ## Reglas para Claude
@@ -67,3 +68,14 @@ Navegador con WebView real: el mago configura web objetivo + una imagen (y títu
 
 ## Instrucciones para el usuario (si la app las necesita)
 Si la app lleva una página de «Instrucciones» de cara al usuario final, mantenerla al día en la misma tarea en que se cambie la función.
+
+## Motor JS (`web/`)
+- Comandos (en `web/`): `npm run build` (regenera `dist/`), `npm test` (Vitest+jsdom), `npm run e2e` (Playwright, Chromium móvil contra `dist/test/page.html`), `npm run typecheck`.
+- **Tras cambiar `web/src`, ejecutar `npm run build`** y commitear `dist/`; si no, la app usa el bundle viejo.
+- API en la página: `OmniWeb.configure({imageUrl,title,idleMs,mode})`, `trigger()`, `reset()`, `disarm()`.
+- Kotlin: `expect fun ForcerWebView(url, config)` (commonMain); Android inyecta el bundle en `onPageStarted/onPageFinished`; iOS pendiente (Fase 4).
+- Lección: las URL `data:` con espacios/comas rompen `srcset`; el motor las normaliza (`normalizeImageUrl`).
+- Probar en emulador: `adb install -r app/build/outputs/apk/debug/app-debug.apk`, abrir y hacer swipe; captura con `adb exec-out screencap -p`.
+
+## Estado de fases
+- **Fase 0 hecha**: spike Android con página local (sustituye img/picture/background, título, re-render, auto/manual, reset).

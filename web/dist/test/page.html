@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Página de pruebas — scroll infinito</title>
+<style>
+  body { margin: 0; font-family: sans-serif; background: #111; color: #eee; }
+  .card { margin: 12px; background: #222; border-radius: 8px; overflow: hidden; }
+  .card img, .card .bg { display: block; width: 100%; height: 220px; object-fit: cover; }
+  .card .bg { background-size: cover; background-position: center; }
+  .card h3 { margin: 8px 12px 12px; font-size: 16px; }
+</style>
+</head>
+<body>
+<div id="feed"></div>
+<div id="sentinel" style="height:1px"></div>
+<script>
+  // Imagen de relleno determinista: SVG con el número de tarjeta
+  function ph(n) {
+    var hue = (n * 47) % 360;
+    var svg = '<svg xmlns="http://www.w3.org/2000/svg" width="400" height="220"><rect width="400" height="220" fill="hsl(' + hue + ',50%,40%)"/><text x="200" y="125" font-size="60" text-anchor="middle" fill="white">#' + n + '</text></svg>';
+    return 'data:image/svg+xml;utf8,' + encodeURIComponent(svg);
+  }
+  var params = new URLSearchParams(location.search);
+  var rerender = params.get('rerender') === '1'; // simula React/Vue repintando el src
+  var feed = document.getElementById('feed');
+  var n = 0;
+
+  function card(i) {
+    var c = document.createElement('div');
+    c.className = 'card';
+    c.dataset.n = i;
+    var kind = i % 3;
+    if (kind === 0) {
+      c.innerHTML = '<img loading="lazy" src="' + ph(i) + '" srcset="' + ph(i) + ' 1x" alt="Foto ' + i + '">';
+    } else if (kind === 1) {
+      c.innerHTML = '<picture><source srcset="' + ph(i) + '" type="image/svg+xml"><img src="' + ph(i) + '" alt="Foto ' + i + '"></picture>';
+    } else {
+      c.innerHTML = '<div class="bg" style="background-image:url(\'' + ph(i) + '\')"></div>';
+    }
+    c.insertAdjacentHTML('beforeend', '<h3>Título original ' + i + '</h3>');
+    return c;
+  }
+  function more() { for (var k = 0; k < 10; k++) feed.appendChild(card(++n)); }
+  more();
+  new IntersectionObserver(function (e) { if (e[0].isIntersecting) more(); }, { rootMargin: '1500px' })
+    .observe(document.getElementById('sentinel'));
+
+  if (rerender) {
+    // Cada 150 ms «el framework» restaura el src original de las imágenes
+    setInterval(function () {
+      document.querySelectorAll('.card').forEach(function (c) {
+        var i = +c.dataset.n;
+        var img = c.querySelector('img');
+        if (img && img.getAttribute('src') !== ph(i)) img.setAttribute('src', ph(i));
+        var bg = c.querySelector('.bg');
+        if (bg && bg.style.backgroundImage.indexOf(encodeURIComponent('#' + i + '<')) < 0) bg.style.backgroundImage = "url('" + ph(i) + "')";
+      });
+    }, 150);
+  }
+</script>
+</body>
+</html>

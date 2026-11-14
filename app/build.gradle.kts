@@ -20,6 +20,8 @@ android {
     }
     kotlinOptions { jvmTarget = "17" }
     buildFeatures { compose = true }
+    // El motor JS compilado (web/dist: omniweb.js + página de pruebas) se empaqueta como assets.
+    sourceSets.getByName("main").assets.srcDir("../web/dist")
 }
 
 dependencies {

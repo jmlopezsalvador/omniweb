@@ -15,3 +15,6 @@ data/android_build/*
 data/ios_build/*
 !data/android_build/.gitkeep
 !data/ios_build/.gitkeep
+web/node_modules/
+web/test-results/
+web/playwright-report/

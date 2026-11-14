@@ -1,37 +1,27 @@
 package com.omniweb.ui
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 
-/** Raíz Compose común (Android e iOS). Pantalla de ejemplo: un contador que se guarda en local. */
+/** Imagen de prueba del spike (SVG en data URL; `#` va como %23). Se sustituirá por la imagen del mago. */
+private const val SPIKE_IMAGE =
+    "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='400' height='220'>" +
+        "<rect width='400' height='220' fill='red'/>" +
+        "<text x='200' y='125' font-size='40' text-anchor='middle' fill='white'>FORZADA</text></svg>"
+
+/** Raíz Compose común. Fase 0: spike con la página local de scroll infinito. */
 @Composable
 fun OmniWebRoot(store: SettingsStore) {
-    var settings by remember { mutableStateOf(store.load()) }
     SystemBarsEffect()
     MaterialTheme {
-        Column(
-            Modifier.fillMaxSize().background(Color.Black),
-            verticalArrangement = Arrangement.Center,
-            horizontalAlignment = Alignment.CenterHorizontally,
-        ) {
-            Text("OmniWeb", color = Color.White)
-            Text("Pulsaciones: ${settings.counter}", color = Color.White)
-            Button(onClick = { settings = settings.copy(counter = settings.counter + 1).also(store::save) }) {
-                Text("Sumar")
-            }
-        }
+        ForcerWebView(
+            url = "file:///android_asset/test/page.html",
+            config = ForceConfig(imageUrl = SPIKE_IMAGE, title = "Predicción"),
+            modifier = Modifier.fillMaxSize().background(Color.Black),
+        )
     }
 }
