@@ -9,6 +9,9 @@ targets:
     platform: iOS
     sources:
       - path: iosApp
+      # Motor JS compartido con Android (compilado y versionado en web/dist): se empaqueta como recurso
+      - path: ../web/dist/omniweb.js
+        buildPhase: resources
     info:
       path: iosApp/Info.plist
       properties:
@@ -19,6 +22,8 @@ targets:
         UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait]
         UISupportedInterfaceOrientations~ipad: [UIInterfaceOrientationPortrait]
         CADisableMinimumFrameDurationOnPhone: true
+        NSAppTransportSecurity:
+          NSAllowsArbitraryLoadsInWebContent: true
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.omniweb

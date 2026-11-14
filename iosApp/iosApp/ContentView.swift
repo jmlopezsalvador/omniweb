@@ -3,7 +3,7 @@ import Shared
 
 struct ComposeView: UIViewControllerRepresentable {
     func makeUIViewController(context: Context) -> UIViewController {
-        MainViewControllerKt.MainViewController()
+        MainViewControllerKt.MainViewController(host: OmniWebHost())
     }
     func updateUIViewController(_ vc: UIViewController, context: Context) {}
 }

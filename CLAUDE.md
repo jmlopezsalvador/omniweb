@@ -78,6 +78,7 @@ Si la app lleva una página de «Instrucciones» de cara al usuario final, mante
 - Probar en emulador: `adb install -r app/build/outputs/apk/debug/app-debug.apk`, abrir y hacer swipe; captura con `adb exec-out screencap -p`.
 
 ## Estado de fases
+- **Fase 4 (iOS) escrita, pendiente de verificar en el iPhone**: `WKWebView` en Swift + puente Kotlin (ver «iOS»). No se puede compilar en Windows: el primer build de Actions dirá si compila.
 - **Fase 5 (parte Android) hecha**: reset de datos y modo práctica, disparo manual oculto, bloqueo de apps externas, modo inmersivo, ajustes por sitio, gestión de sitios, imágenes en ficheros. Falta lo equivalente en iOS (Fase 4).
 - **Fase 3 en curso**: YouTube y Amazon probados (sitios predefinidos `YOUTUBE`, `AMAZON`; el modo genérico basta, ver lecciones). Pendiente: Netflix e Instagram (uno a uno; exigen login).
 - **Fase 2 hecha**: inicio con lista de sitios (Google Imágenes + añadir URL), «Preparar» (captura: navegar → «Capturar elemento» → tocar → guardar) y «Efecto» (abre la página capturada y fuerza imagen + todos los textos). Un forzaje por sitio.
@@ -126,3 +127,12 @@ Si la app lleva una página de «Instrucciones» de cara al usuario final, mante
 - **Almacenamiento**: `ForceStore(prefs, blobs)`. Imagen y HTML de la tarjeta van a `BlobStore` (Android `FileBlobStore`: `filesDir/blobs`); lee también el formato antiguo en preferencias. Se pueden borrar forzajes y quitar sitios añadidos (no los predefinidos).
 - Expects nuevos en `Platform.kt`: `SystemBarsEffect(immersive)`, `VolumeKeyEffect`, `clearBrowsingData`. iOS los tiene como stubs: Fase 4 debe implementarlos (`WKWebsiteDataStore.removeData`, idleTimerDisabled, y un gesto alternativo al volumen: iOS no permite capturar los botones de volumen sin APIs privadas).
 - Pruebas en emulador: pulsación larga con `adb shell input swipe x y x y 1500`; volumen con `keyevent 24/25`; user agent con `node tools/cdp.mjs "navigator.userAgent"`.
+
+## iOS (Fase 4)
+- **Arquitectura**: el `WKWebView` y lo del sistema viven en **Swift** (`iosApp/iosApp/OmniWebHost.swift`), que implementa el protocolo `WebViewHost` declarado en Kotlin (`shared/src/iosMain/.../IosWebHost.kt`); Compose lo embebe con `UIKitView` (`ForcerWebView.ios.kt`). Se hizo así porque no hay Mac para compilar y los enums/protocolos de WebKit son más seguros en Swift que vía cinterop. Cambiar una firma del protocolo obliga a cambiar el Swift (las etiquetas salen de los nombres de los parámetros).
+- Entrada: `MainViewControllerKt.MainViewController(host: OmniWebHost())` (ContentView.swift). `iosWebHost` global guarda el host.
+- El motor `web/dist/omniweb.js` se empaqueta como recurso (project.yml `buildPhase: resources`) y se inyecta con `WKUserScript` al empezar cada documento; el script de arranque (`OmniWeb.configure(...)` / `startCapture()`) al terminar el DOM. El puente `window.OmniBridge.onCapture(json)` se simula con un shim sobre `webkit.messageHandlers`. `jsQuote`/`ForceConfig.toJs()` son comunes (con tests).
+- **Compose queda POR DEBAJO del `UIKitView`**: no se puede superponer Compose al navegador. Por eso las esquinas ocultas del efecto son vistas nativas dentro del `OmniWebView` (`onHiddenTap` / `onHiddenLongPress`) y el botón «Inicio» de Preparar es visible (no hay tecla atrás; «atrás» en la web = gesto de borde). Los diálogos Compose sí salen por encima.
+- Volumen: `AVAudioSession.outputVolume` (KVO); no hay evento con el volumen al máximo/mínimo. Datos: `WKWebsiteDataStore` + `URLCache` + cookies. Blobs: Application Support/blobs.
+- No se bloquean enlaces universales (WKWebView no los abre en otra app al navegar dentro); sí los esquemas no web (`decidePolicyFor`).
+- Instalar: Sideloadly/AltStore con el `.ipa` de `gh run download`. Lanzar el workflow solo con permiso del usuario.

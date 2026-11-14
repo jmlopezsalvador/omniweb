@@ -280,6 +280,7 @@ private fun CaptureScreen(site: Site, store: ForceStore, onDone: (saved: Boolean
                 modifier = Modifier.weight(1f),
                 style = MaterialTheme.typography.bodySmall,
             )
+            TextButton(onClick = { onDone(false) }) { Text("Inicio") }
             TextButton(onClick = { showBar = !showBar }) { Text(if (showBar) "Ocultar barra" else "Mostrar barra") }
             if (armed) {
                 OutlinedButton(onClick = { armed = false; error = null }) { Text("Cancelar") }
@@ -368,6 +369,8 @@ private fun EffectScreen(site: Site, item: ForcedItem, settings: SiteSettings, o
             navId = navId,
             desktop = settings.desktop,
             triggerNonce = trigger,
+            onHiddenTap = { trigger++ },
+            onHiddenLongPress = { menu = true },
         )
         // Esquina inferior derecha: disparo manual
         HiddenCorner(Modifier.align(Alignment.BottomEnd), onTap = { trigger++ })

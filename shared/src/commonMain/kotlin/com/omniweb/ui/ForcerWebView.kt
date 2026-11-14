@@ -41,7 +41,36 @@ expect fun ForcerWebView(
     desktop: Boolean = false,
     /** Cada incremento dispara el forzaje a mano (`OmniWeb.trigger()`): gesto oculto en el efecto. */
     triggerNonce: Int = 0,
+    /** Gestos ocultos NATIVOS del efecto (iOS: esquinas dentro del navegador, porque Compose queda por debajo). */
+    onHiddenTap: (() -> Unit)? = null,
+    onHiddenLongPress: (() -> Unit)? = null,
 )
 
 /** Descarga una imagen y la devuelve como data: URL (null si falla). Android: HttpURLConnection. */
 expect suspend fun fetchImageDataUrl(url: String, referer: String): String?
+
+/** Literal de cadena JS entre comillas dobles; escapa lo que rompería el script (comillas, saltos, U+2028/9, `<`). */
+internal fun jsQuote(s: String): String {
+    val sb = StringBuilder("\"")
+    for (c in s) {
+        when {
+            c == '\\' -> sb.append("\\\\")
+            c == '"' -> sb.append("\\\"")
+            c == '\n' -> sb.append("\\n")
+            c == '\r' -> sb.append("\\r")
+            c == '\t' -> sb.append("\\t")
+            c == '<' -> sb.append("\\u003c")
+            c == '\u2028' -> sb.append("\\u2028")
+            c == '\u2029' -> sb.append("\\u2029")
+            c < ' ' -> sb.append("\\u").append(c.code.toString(16).padStart(4, '0'))
+            else -> sb.append(c)
+        }
+    }
+    return sb.append('"').toString()
+}
+
+/** Config → literal de objeto JS para `OmniWeb.configure(...)`. Común a Android e iOS. */
+internal fun ForceConfig.toJs(): String =
+    "{imageUrl:${jsQuote(imageUrl)},texts:[${texts.joinToString(",") { jsQuote(it) }}]," +
+        (if (html != null) "html:${jsQuote(html)}," else "") +
+        "idleMs:$idleMs,mode:'${if (auto) "auto" else "manual"}'}"

@@ -19,16 +19,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.viewinterop.AndroidView
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import org.json.JSONArray
 import org.json.JSONObject
 import java.net.HttpURLConnection
 import java.net.URL
-
-/** Config → literal JS: `JSONObject.quote` escapa bien comillas, saltos de línea y U+2028. */
-internal fun ForceConfig.toJs(): String =
-    "{imageUrl:${JSONObject.quote(imageUrl)},texts:${JSONArray(texts)}," +
-        (if (html != null) "html:${JSONObject.quote(html)}," else "") +
-        "idleMs:$idleMs,mode:'${if (auto) "auto" else "manual"}'}"
 
 internal fun parseCapture(json: String): Capture {
     val o = JSONObject(json)
@@ -56,6 +49,8 @@ actual fun ForcerWebView(
     navId: Int,
     desktop: Boolean,
     triggerNonce: Int,
+    onHiddenTap: (() -> Unit)?,
+    onHiddenLongPress: (() -> Unit)?,
 ) {
     val latestCapture by rememberUpdatedState(onCapture)
     val latestArmed by rememberUpdatedState(armed)

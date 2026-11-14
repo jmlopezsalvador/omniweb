@@ -3,26 +3,56 @@
 package com.omniweb.ui
 
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.rememberUpdatedState
 import kotlinx.cinterop.ExperimentalForeignApi
 import platform.Foundation.NSUserDefaults
 
-/** iOS: la barra de estado y el indicador de inicio se ocultan en ContentView.swift (Fase 4: inmersivo + idleTimerDisabled). */
+/** iOS: sin barras (SwiftUI las oculta en ContentView.swift); en el efecto Swift mantiene la pantalla encendida. */
 @Composable
-actual fun SystemBarsEffect(immersive: Boolean) {}
+actual fun SystemBarsEffect(immersive: Boolean) {
+    val host = iosWebHost
+    DisposableEffect(immersive) {
+        host?.setImmersive(immersive)
+        onDispose { if (immersive) host?.setImmersive(false) }
+    }
+}
 
-/** iOS: pendiente (Fase 4): no hay botón de volumen programable sin APIs privadas; se usará otro gesto. */
+/**
+ * iOS: las teclas de volumen se detectan en Swift observando `AVAudioSession.outputVolume`. Ojo: con el volumen al
+ * máximo (o al mínimo) pulsar más no cambia nada y no hay evento; el gesto fiable es la esquina inferior derecha.
+ */
 @Composable
-actual fun VolumeKeyEffect(enabled: Boolean, onPress: () -> Unit) {}
+actual fun VolumeKeyEffect(enabled: Boolean, onPress: () -> Unit) {
+    val host = iosWebHost
+    val latest by rememberUpdatedState(onPress)
+    DisposableEffect(enabled) {
+        if (enabled) {
+            host?.setVolumeListener(
+                object : VoidCallback {
+                    override fun invoke() = latest()
+                },
+            )
+        }
+        onDispose { host?.setVolumeListener(null) }
+    }
+}
 
-/** iOS: pendiente (Fase 4): WKWebsiteDataStore.defaultDataStore().removeData(...). */
-actual fun clearBrowsingData() {}
+/** iOS: `WKWebsiteDataStore` + `URLCache` + cookies, en Swift. */
+actual fun clearBrowsingData() {
+    iosWebHost?.clearBrowsingData()
+}
 
-/** iOS: de momento en NSUserDefaults (Fase 4: ficheros en Application Support). */
-class UserDefaultsBlobStore : BlobStore {
-    private val d = NSUserDefaults.standardUserDefaults
-    override fun read(name: String): String? = d.stringForKey("blob.$name")
-    override fun write(name: String, data: String) = d.setObject(data, "blob.$name")
-    override fun delete(name: String) = d.removeObjectForKey("blob.$name")
+/** Textos grandes (imagen, HTML de la tarjeta) como ficheros en Application Support, gestionados por Swift. */
+class HostBlobStore : BlobStore {
+    override fun read(name: String): String? = iosWebHost?.readBlob(name)
+    override fun write(name: String, data: String) {
+        iosWebHost?.writeBlob(name, data)
+    }
+    override fun delete(name: String) {
+        iosWebHost?.deleteBlob(name)
+    }
 }
 
 class UserDefaultsStore : KeyValueStore {
