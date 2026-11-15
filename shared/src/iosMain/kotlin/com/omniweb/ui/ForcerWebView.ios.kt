@@ -45,6 +45,8 @@ actual fun ForcerWebView(
     covered: Boolean,
     onPageInfo: ((url: String, title: String) -> Unit)?,
     onScroll: ((down: Boolean) -> Unit)?,
+    onForced: ((url: String) -> Unit)?,
+    layer: Int,
 ) {
     val host = iosWebHost
     if (host == null) {
@@ -58,6 +60,8 @@ actual fun ForcerWebView(
     val latestLong by rememberUpdatedState(onHiddenLongPress)
     val latestInfo by rememberUpdatedState(onPageInfo)
     val latestScroll by rememberUpdatedState(onScroll)
+    val latestForced by rememberUpdatedState(onForced)
+    val latestExit by rememberUpdatedState(onExit)
     val density = LocalDensity.current.density
     var view by remember { mutableStateOf<UIView?>(null) }
     var bounds by remember { mutableStateOf<Rect?>(null) }
@@ -71,10 +75,10 @@ actual fun ForcerWebView(
 
     val callbacks = remember {
         object : WebViewCallbacks {
-            override fun onCapture(imageUrl: String, imageData: String?, texts: List<String>, html: String?, pageUrl: String, aspect: Double) {
+            override fun onCapture(imageUrl: String, imageData: String?, texts: List<String>, html: String?, detailUrl: String?, pageUrl: String, aspect: Double) {
                 // Solo se atiende en la pantalla de preparación y con la captura armada
                 if (!captureMode || !latestArmed) return
-                latestCapture(Capture(imageUrl, imageData, texts, html, pageUrl, aspect.toFloat()))
+                latestCapture(Capture(imageUrl, imageData, texts, html, detailUrl, pageUrl, aspect.toFloat()))
             }
 
             override fun onPageInfo(url: String, title: String) {
@@ -83,6 +87,14 @@ actual fun ForcerWebView(
 
             override fun onScroll(down: Boolean) {
                 if (!captureMode) latestScroll?.invoke(down)
+            }
+
+            override fun onForced(url: String) {
+                if (!captureMode) latestForced?.invoke(url)
+            }
+
+            override fun onBack() {
+                latestExit?.invoke()
             }
 
             override fun onHiddenTap() {
@@ -97,7 +109,7 @@ actual fun ForcerWebView(
 
     // El navegador nace y muere con esta pantalla
     DisposableEffect(Unit) {
-        val v = host.createWebView(desktop, !captureMode && config != null, callbacks)
+        val v = host.createWebView(desktop, !captureMode && config != null && layer == 0, layer, callbacks)
         host.setStartScript(v, startScript())
         host.loadUrl(v, url)
         view = v

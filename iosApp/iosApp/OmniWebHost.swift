@@ -23,7 +23,7 @@ private let downloadUserAgent =
 
 /// El motor llama a `window.OmniBridge.onCapture(json)` (así es en Android); aquí se reenvía al manejador nativo.
 private let bridgeShim = """
-window.OmniBridge = { onCapture: function (json) { window.webkit.messageHandlers.OmniBridge.postMessage(json); }, onScroll: function (dir) { window.webkit.messageHandlers.OmniBridge.postMessage("scroll:" + dir); } };
+window.OmniBridge = { onCapture: function (json) { window.webkit.messageHandlers.OmniBridge.postMessage(json); }, onScroll: function (dir) { window.webkit.messageHandlers.OmniBridge.postMessage("scroll:" + dir); }, onForced: function (url) { window.webkit.messageHandlers.OmniBridge.postMessage("forced:" + url); } };
 """
 
 /// Cargado una vez: el motor compilado, empaquetado como recurso (web/dist/omniweb.js, ver project.yml).
@@ -91,6 +91,10 @@ final class OmniWebView: WKWebView, WKNavigationDelegate, WKScriptMessageHandler
     // MARK: WKScriptMessageHandler: captura entregada por el motor
 
     func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
+        if message.name == "OmniBridge", let text = message.body as? String, text.hasPrefix("forced:") {
+            callbacks.onForced(url: String(text.dropFirst(7)))
+            return
+        }
         if message.name == "OmniBridge", let text = message.body as? String, text.hasPrefix("scroll:") {
             callbacks.onScroll(down: text == "scroll:down")
             return
@@ -103,9 +107,10 @@ final class OmniWebView: WKWebView, WKNavigationDelegate, WKScriptMessageHandler
         let imageData = obj["imageData"] as? String // NSNull si no hay → nil
         let texts = (obj["texts"] as? [String]) ?? []
         let html = obj["html"] as? String
+        let detailUrl = obj["detailUrl"] as? String
         let pageUrl = (obj["pageUrl"] as? String) ?? ""
         let aspect = (obj["aspect"] as? Double) ?? 1.0
-        callbacks.onCapture(imageUrl: imageUrl, imageData: imageData, texts: texts, html: html, pageUrl: pageUrl, aspect: aspect)
+        callbacks.onCapture(imageUrl: imageUrl, imageData: imageData, texts: texts, html: html, detailUrl: detailUrl, pageUrl: pageUrl, aspect: aspect)
     }
 
     // MARK: WKNavigationDelegate: no salir a otras apps
@@ -122,23 +127,29 @@ final class OmniWebView: WKWebView, WKNavigationDelegate, WKScriptMessageHandler
 
 // MARK: - Capa nativa (SwiftUI) por encima de Compose
 
-/// Estado que Kotlin actualiza (vía `OmniWebHost`) y que SwiftUI pinta.
-final class WebOverlayModel: ObservableObject {
-    @Published var web: OmniWebView?
-    @Published var frame: CGRect = .zero
-    @Published var hidden: Bool = false
+/// Una capa de navegador: 0 = el principal, 1 = la ficha del objeto (encima).
+struct WebLayer {
+    var web: OmniWebView
+    var frame: CGRect
+    var hidden: Bool
 }
 
-/// Contenedor a pantalla completa. Deja pasar todos los toques que no caen en el navegador ni en las esquinas ocultas, de modo
+/// Estado que Kotlin actualiza (vía `OmniWebHost`) y que SwiftUI pinta.
+final class WebOverlayModel: ObservableObject {
+    @Published var layers: [Int: WebLayer] = [:]
+}
+
+/// Contenedor a pantalla completa. Deja pasar todos los toques que no caen en un navegador ni en las esquinas ocultas, de modo
 /// que Compose (por debajo) sigue recibiendo los suyos. Las esquinas del efecto están AQUÍ, por encima del navegador:
 /// dentro del WKWebView el propio WebKit podía taparlas (sobre todo en modo escritorio, que redibuja las capas con el zoom).
 final class WebOverlayContainer: UIView {
-    private var web: OmniWebView?
+    private var webs: [Int: OmniWebView] = [:]
     private let cornerTap = UIView()
     private let cornerMenu = UIView()
     private let cornerSize: CGFloat = 72
     private let menuWidth: CGFloat = 180
     private let menuHeight: CGFloat = 64
+    private let edgePan = UIScreenEdgePanGestureRecognizer()
 
     override init(frame: CGRect) {
         super.init(frame: frame)
@@ -152,37 +163,58 @@ final class WebOverlayContainer: UIView {
         let long = UILongPressGestureRecognizer(target: self, action: #selector(longCorner(_:)))
         long.minimumPressDuration = 0.8
         cornerMenu.addGestureRecognizer(long)
+        // Arrastre desde el borde izquierdo = cerrar la ficha (como «atrás» en un navegador)
+        edgePan.edges = .left
+        edgePan.addTarget(self, action: #selector(edgeBack(_:)))
+        edgePan.isEnabled = false
+        addGestureRecognizer(edgePan)
     }
 
     required init?(coder: NSCoder) { fatalError("init(coder:) no se usa") }
 
-    func update(web newWeb: OmniWebView?, frame target: CGRect, hidden: Bool) {
-        if web !== newWeb {
-            web?.removeFromSuperview()
-            web = newWeb
-            if let created = newWeb { insertSubview(created, at: 0) } // por debajo de las esquinas
+    func update(layers: [Int: WebLayer]) {
+        // Quitar las capas que ya no existen (o cuya vista cambió)
+        for (key, web) in webs where layers[key]?.web !== web {
+            web.removeFromSuperview()
+            webs[key] = nil
         }
-        guard let current = web else {
+        // Añadir y colocar por orden: la capa mayor queda encima
+        for key in layers.keys.sorted() {
+            guard let layer = layers[key] else { continue }
+            if webs[key] == nil {
+                webs[key] = layer.web
+                addSubview(layer.web)
+            }
+            layer.web.frame = layer.frame
+            layer.web.isHidden = layer.hidden
+            bringSubviewToFront(layer.web)
+        }
+        edgePan.isEnabled = layers[1] != nil
+        // Esquinas: solo las del navegador principal y solo cuando no hay ficha encima
+        if let base = layers[0], base.web.effectGestures, !base.hidden, layers[1] == nil {
+            let target = base.frame
+            cornerTap.isHidden = false
+            cornerMenu.isHidden = false
+            cornerTap.frame = CGRect(x: target.maxX - cornerSize, y: target.maxY - cornerSize, width: cornerSize, height: cornerSize)
+            // Menú oculto: arriba en el CENTRO, ancho y alto para que sea fácil de acertar
+            cornerMenu.frame = CGRect(x: target.midX - menuWidth / 2, y: target.minY, width: menuWidth, height: menuHeight)
+        } else {
             cornerTap.isHidden = true
             cornerMenu.isHidden = true
-            return
         }
-        current.frame = target
-        current.isHidden = hidden
-        let showCorners = current.effectGestures && !hidden
-        cornerTap.isHidden = !showCorners
-        cornerMenu.isHidden = !showCorners
-        cornerTap.frame = CGRect(x: target.maxX - cornerSize, y: target.maxY - cornerSize, width: cornerSize, height: cornerSize)
-        // Menú oculto: arriba en el CENTRO, ancho y alto para que sea fácil de acertar
-        cornerMenu.frame = CGRect(x: target.midX - menuWidth / 2, y: target.minY, width: menuWidth, height: menuHeight)
         bringSubviewToFront(cornerTap)
         bringSubviewToFront(cornerMenu)
     }
 
-    @objc private func tapCorner() { web?.callbacks.onHiddenTap() }
+    @objc private func tapCorner() { webs[0]?.callbacks.onHiddenTap() }
 
     @objc private func longCorner(_ gesture: UILongPressGestureRecognizer) {
-        if gesture.state == .began { web?.callbacks.onHiddenLongPress() }
+        if gesture.state == .began { webs[0]?.callbacks.onHiddenLongPress() }
+    }
+
+    @objc private func edgeBack(_ gesture: UIScreenEdgePanGestureRecognizer) {
+        // Si la ficha tiene historial propio, el gesto de borde del WKWebView ya navega hacia atrás: no se cierra la capa
+        if gesture.state == .ended, let detail = webs[1], !detail.canGoBack { detail.callbacks.onBack() }
     }
 
     override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
@@ -197,7 +229,7 @@ struct WebOverlay: UIViewRepresentable {
     func makeUIView(context: Context) -> WebOverlayContainer { WebOverlayContainer(frame: .zero) }
 
     func updateUIView(_ container: WebOverlayContainer, context: Context) {
-        container.update(web: model.web, frame: model.frame, hidden: model.hidden)
+        container.update(layers: model.layers)
     }
 }
 
@@ -217,21 +249,24 @@ final class OmniWebHost: NSObject, WebViewHost {
 
     // MARK: Navegador
 
-    func createWebView(desktop: Bool, effectGestures: Bool, callbacks: WebViewCallbacks) -> UIView {
+    func createWebView(desktop: Bool, effectGestures: Bool, layer: Int32, callbacks: WebViewCallbacks) -> UIView {
         let created = OmniWebView(desktop: desktop, effectGestures: effectGestures, callbacks: callbacks)
-        overlay.web = created
+        overlay.layers[Int(layer)] = WebLayer(web: created, frame: .zero, hidden: false)
         return created
     }
 
     func layoutWebView(view: UIView, x: Double, y: Double, width: Double, height: Double, hidden: Bool) {
-        // Solo el navegador vigente (al cambiar de pantalla puede llegar un aviso tardío del anterior)
-        guard let web = view as? OmniWebView, web === overlay.web else { return }
-        overlay.frame = CGRect(x: x, y: y, width: width, height: height)
-        overlay.hidden = hidden
+        // Solo los navegadores vigentes (al cambiar de pantalla puede llegar un aviso tardío del anterior)
+        guard let web = view as? OmniWebView,
+              let key = overlay.layers.first(where: { $0.value.web === web })?.key else { return }
+        overlay.layers[key]?.frame = CGRect(x: x, y: y, width: width, height: height)
+        overlay.layers[key]?.hidden = hidden
     }
 
     func destroyWebView(view: UIView) {
-        if let web = view as? OmniWebView, web === overlay.web { overlay.web = nil }
+        guard let web = view as? OmniWebView,
+              let key = overlay.layers.first(where: { $0.value.web === web })?.key else { return }
+        overlay.layers[key] = nil
     }
 
     func loadUrl(view: UIView, url: String) {

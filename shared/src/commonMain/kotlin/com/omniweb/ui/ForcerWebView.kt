@@ -16,6 +16,8 @@ data class ForceConfig(
     val auto: Boolean = true,
     /** El motor avisa de la dirección del scroll (la barra inferior decorativa se esconde al bajar). */
     val reportScroll: Boolean = false,
+    /** Ficha del objeto: el motor avisa a la app al forzar y la app la abre en una segunda capa. */
+    val detailUrl: String? = null,
 )
 
 /**
@@ -52,6 +54,10 @@ expect fun ForcerWebView(
     onPageInfo: ((url: String, title: String) -> Unit)? = null,
     /** Dirección del scroll: true = bajando. Solo si la config lleva `reportScroll`. */
     onScroll: ((down: Boolean) -> Unit)? = null,
+    /** El motor ha forzado: `url` = ficha del objeto (vacía si no hay). */
+    onForced: ((url: String) -> Unit)? = null,
+    /** Capa del navegador: 0 = el principal, 1 = la ficha encima (en iOS son capas nativas distintas). */
+    layer: Int = 0,
 )
 
 /** Descarga una imagen y la devuelve como data: URL (null si falla). Android: HttpURLConnection. */
@@ -82,4 +88,5 @@ internal fun ForceConfig.toJs(): String =
     "{imageUrl:${jsQuote(imageUrl)},texts:[${texts.joinToString(",") { jsQuote(it) }}]," +
         (if (html != null) "html:${jsQuote(html)}," else "") +
         (if (reportScroll) "reportScroll:true," else "") +
+        (if (!detailUrl.isNullOrBlank()) "detailUrl:${jsQuote(detailUrl)}," else "") +
         "idleMs:$idleMs,mode:'tap',armed:$auto}"

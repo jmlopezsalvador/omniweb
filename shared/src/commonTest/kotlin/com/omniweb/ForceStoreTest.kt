@@ -62,7 +62,7 @@ class ForceStoreTest {
     @Test fun removesOnlyCustomSitesAndTheirItem() {
         val st = store()
         val c = st.addSite("Ebay", "https://www.ebay.es")
-        st.save(c.id, ForcedItem("data:a", listOf("t"), null, "p", 1f))
+        st.save(c.id, ForcedItem("data:a", listOf("t"), null, null, "p", 1f))
         assertTrue(st.isCustom(c.id))
         assertTrue(st.removeSite(c.id))
         assertFalse(st.sites().any { it.id == c.id })
@@ -117,7 +117,7 @@ class ForceStoreTest {
     @Test fun savesAndLoadsAForcedItem() {
         val st = store()
         assertNull(st.load("google-images"))
-        val item = ForcedItem("data:image/jpeg;base64,AAAA", listOf("Título", "Fuente\ncon salto"), "<div>a\tb\n<b>x</b></div>", "https://g.co/x?y=1", 1.5f)
+        val item = ForcedItem("data:image/jpeg;base64,AAAA", listOf("Título", "Fuente\ncon salto"), "<div>a\tb\n<b>x</b></div>", null, "https://g.co/x?y=1", 1.5f)
         st.save("google-images", item)
         assertEquals(item, st.load("google-images"))
     }
@@ -125,7 +125,7 @@ class ForceStoreTest {
     @Test fun bigPayloadsGoToTheBlobStoreNotThePreferences() {
         val prefs = MemoryStore()
         val blobs = MemoryBlobs()
-        store(prefs, blobs).save("s", ForcedItem("data:IMG", listOf("t"), "<p>html</p>", "p", 1f))
+        store(prefs, blobs).save("s", ForcedItem("data:IMG", listOf("t"), "<p>html</p>", null, "p", 1f))
         assertEquals("data:IMG", blobs.read("f.s.image"))
         assertEquals("<p>html</p>", blobs.read("f.s.html"))
         assertEquals("", prefs.getString("f.s.image"))
@@ -147,17 +147,39 @@ class ForceStoreTest {
 
     @Test fun oneForcedItemPerSiteLastWins() {
         val st = store()
-        st.save("s", ForcedItem("data:a", listOf("1", "2", "3"), "<b>1</b>", "p", 1f))
-        st.save("s", ForcedItem("data:b", listOf("x"), null, "q", 2f))
+        st.save("s", ForcedItem("data:a", listOf("1", "2", "3"), "<b>1</b>", null, "p", 1f))
+        st.save("s", ForcedItem("data:b", listOf("x"), null, null, "q", 2f))
         assertEquals(listOf("x"), st.load("s")!!.texts)
         assertEquals("data:b", st.load("s")!!.imageData)
         assertNull(st.load("s")!!.html) // el HTML anterior no sobrevive
     }
 
+    @Test fun detailUrlIsSavedLoadedAndSummarised() {
+        val st = store()
+        st.save("s", ForcedItem("data:a", listOf("Título"), null, "https://x.test/ficha/1", "p", 1f))
+        assertEquals("https://x.test/ficha/1", st.load("s")!!.detailUrl)
+        assertTrue(st.summary("s")!!.hasDetail)
+        st.save("s", ForcedItem("data:a", listOf("Título"), null, null, "p", 1f))
+        assertNull(st.load("s")!!.detailUrl)
+        assertFalse(st.summary("s")!!.hasDetail)
+    }
+
+    @Test fun clearForgetsTheDetail() {
+        val st = store()
+        st.save("s", ForcedItem("data:a", listOf("t"), null, "https://x.test/f", "p", 1f))
+        st.clear("s")
+        assertNull(st.summary("s"))
+    }
+
+    @Test fun shortUrlTrims() {
+        assertEquals("x.test/a/b", com.omniweb.ui.shortUrl("https://www.x.test/a/b"))
+        assertTrue(com.omniweb.ui.shortUrl("https://x.test/" + "a".repeat(100)).endsWith("…"))
+    }
+
     @Test fun clearRemovesTheItemEverywhere() {
         val blobs = MemoryBlobs()
         val st = store(blobs = blobs)
-        st.save("s", ForcedItem("data:a", listOf("1"), "<b/>", "p", 1f))
+        st.save("s", ForcedItem("data:a", listOf("1"), "<b/>", null, "p", 1f))
         st.clear("s")
         assertNull(st.load("s"))
         assertTrue(blobs.m.isEmpty())
@@ -167,14 +189,14 @@ class ForceStoreTest {
         val prefs = MemoryStore()
         val blobs = MemoryBlobs()
         assertNull(store(prefs, blobs).summary("s"))
-        store(prefs, blobs).save("s", ForcedItem("data:IMG", listOf("Título", "Fuente"), "<p/>", "p", 1f))
+        store(prefs, blobs).save("s", ForcedItem("data:IMG", listOf("Título", "Fuente"), "<p/>", null, "p", 1f))
         blobs.m.clear() // aunque los ficheros grandes no estén, el resumen sale de las preferencias
         assertEquals("Título", store(prefs, blobs).summary("s")!!.title)
     }
 
     @Test fun summaryIsGoneAfterClear() {
         val st = store()
-        st.save("s", ForcedItem("data:a", listOf("t"), null, "p", 1f))
+        st.save("s", ForcedItem("data:a", listOf("t"), null, null, "p", 1f))
         st.clear("s")
         assertNull(st.summary("s"))
     }

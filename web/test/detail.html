@@ -1,0 +1,15 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ficha del objeto</title>
+<style>body{margin:0;font-family:sans-serif;background:#0b2a4a;color:#fff;padding:24px}h1{font-size:28px}.big{font-size:80px;margin:40px 0}</style>
+</head>
+<body>
+<h1>FICHA DEL OBJETO</h1>
+<div class="big" id="n">#</div>
+<p>Esta es la página real del elemento (segunda capa). Atrás vuelve a la lista.</p>
+<script>document.getElementById('n').textContent = '#' + (new URLSearchParams(location.search).get('n') || '?');</script>
+</body>
+</html>

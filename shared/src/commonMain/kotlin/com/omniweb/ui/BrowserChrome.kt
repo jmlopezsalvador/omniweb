@@ -2,6 +2,7 @@ package com.omniweb.ui
 
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -55,7 +56,7 @@ private val ChromeText = Color(0xFFE8EAED)
 
 /** Barra superior. Ocupa también la zona de la barra de estado (hora, batería) con su mismo color. */
 @Composable
-fun BrowserTopBar(ios: Boolean, url: String, onMenu: () -> Unit) {
+fun BrowserTopBar(ios: Boolean, url: String, onMenu: () -> Unit, onBack: (() -> Unit)? = null) {
     val bar = if (ios) IosBar else ChromeBar
     Box(Modifier.fillMaxWidth().background(bar).statusBarsPadding()) {
         if (ios) {
@@ -63,6 +64,9 @@ fun BrowserTopBar(ios: Boolean, url: String, onMenu: () -> Unit) {
                 Modifier.fillMaxWidth().height(50.dp).padding(horizontal = 14.dp, vertical = 7.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
+                if (onBack != null) {
+                    Box(Modifier.clickable { onBack() }.padding(end = 6.dp)) { Chevron(left = true, color = IosIcon) }
+                }
                 Box(
                     Modifier.weight(1f).height(36.dp).clip(RoundedCornerShape(12.dp)).background(IosField)
                         .pointerInput(Unit) { detectTapGestures(onLongPress = { onMenu() }) },
@@ -79,6 +83,9 @@ fun BrowserTopBar(ios: Boolean, url: String, onMenu: () -> Unit) {
                 Modifier.fillMaxWidth().height(56.dp).padding(horizontal = 10.dp, vertical = 8.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
+                if (onBack != null) {
+                    Box(Modifier.clickable { onBack() }.padding(end = 4.dp)) { Chevron(left = true, color = ChromeText) }
+                }
                 Row(
                     Modifier.weight(1f).height(40.dp).clip(RoundedCornerShape(20.dp)).background(ChromeField)
                         .pointerInput(Unit) { detectTapGestures(onLongPress = { onMenu() }) }.padding(horizontal = 14.dp),
@@ -99,11 +106,11 @@ fun BrowserTopBar(ios: Boolean, url: String, onMenu: () -> Unit) {
 
 /** Barra inferior de Safari (solo iOS). `visible=false` la esconde con la altura a 0 (al bajar). */
 @Composable
-fun BrowserBottomBar(visible: Boolean) {
+fun BrowserBottomBar(visible: Boolean, onBack: (() -> Unit)? = null) {
     Box(Modifier.fillMaxWidth().background(IosBar).navigationBarsPadding()) {
         if (visible) {
             Row(Modifier.fillMaxWidth().height(46.dp), horizontalArrangement = Arrangement.SpaceEvenly, verticalAlignment = Alignment.CenterVertically) {
-                Chevron(left = true, color = IosIcon)
+                Box(Modifier.clickable(enabled = onBack != null) { onBack?.invoke() }) { Chevron(left = true, color = IosIcon) }
                 Chevron(left = false, color = IosIcon.copy(alpha = 0.35f))
                 ShareIcon(IosIcon)
                 BookIcon(IosIcon)

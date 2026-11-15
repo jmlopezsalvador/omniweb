@@ -161,6 +161,7 @@ Sustituye a «sustituir al parar el scroll» (RF-04) y al disparo inmediato (RF-
   Criterio genérico: la tarjeta tiene hermanas con la misma estructura (≥2) y un medio de tamaño mínimo. Si el toque no cae en una tarjeta válida, la web se comporta con normalidad.
 
 ### 10.3 Preparar: qué se guarda
+> **Estado 6c (Android hecho):** URL de la ficha automática + «Fijar ficha» manual; ficha en segunda capa con «atrás». iOS escrito, pendiente de probar.
 - **RF-29** Además de la imagen, textos y estructura de la tarjeta, se guarda la **URL de la página del objeto**. Orden de preferencia:
   1) el `href` del enlace que envuelve la tarjeta (automático; vale en YouTube y Amazon); 2) paso opcional «ábrelo como lo haría el espectador y pulsa *Guardar esta página*»
   (necesario donde la ficha es un panel dentro de la misma página, como en Google Imágenes).

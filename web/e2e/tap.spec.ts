@@ -129,3 +129,31 @@ test('el modo antiguo «auto» sigue funcionando (sustituye al parar)', async ({
   }
   await expect.poll(() => forcedCard(page)).not.toBeNull();
 });
+
+test('al forzar se avisa a la app con la URL de la ficha, una sola vez', async ({ page }) => {
+  await page.addInitScript(() => {
+    (window as any).__forced = [];
+    (window as any).OmniBridge = { onCapture() {}, onForced: (u: string) => (window as any).__forced.push(u) };
+  });
+  await open(page, { detailUrl: 'https://example.com/ficha/5' });
+  const p = await showCard(page, 5);
+  await page.waitForTimeout(600);
+  await page.mouse.click(p.x, p.y);
+  expect(await page.evaluate(() => (window as any).__forced)).toEqual(['https://example.com/ficha/5']);
+  const q = await showCard(page, 7);
+  await page.waitForTimeout(600);
+  await page.mouse.click(q.x, q.y); // ya forzado: no vuelve a avisar
+  expect(await page.evaluate(() => (window as any).__forced)).toEqual(['https://example.com/ficha/5']);
+});
+
+test('sin URL de ficha se avisa con cadena vacía (la app no abre nada)', async ({ page }) => {
+  await page.addInitScript(() => {
+    (window as any).__forced = [];
+    (window as any).OmniBridge = { onCapture() {}, onForced: (u: string) => (window as any).__forced.push(u) };
+  });
+  await open(page);
+  const p = await showCard(page, 4);
+  await page.waitForTimeout(600);
+  await page.mouse.click(p.x, p.y);
+  expect(await page.evaluate(() => (window as any).__forced)).toEqual(['']);
+});

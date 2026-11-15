@@ -79,6 +79,7 @@ Si la app lleva una página de «Instrucciones» de cara al usuario final, mante
 - Probar en emulador: `adb install -r app/build/outputs/apk/debug/app-debug.apk`, abrir y hacer swipe; captura con `adb exec-out screencap -p`.
 
 ## Estado de fases
+- **Fase 6c hecha en Android (iOS escrito, sin build)**: ficha del objeto en segunda capa. Pendiente 6e (barra inferior de la app, Favoritos, favicons).
 - **Fase 6b+6d hechas en Android (pendiente de iOS)**: el efecto fuerza al TOCAR un elemento de la lista con el truco armado y la lista en reposo (`tap.ts`), activación secreta con vibración. Pendiente 6c (ficha en segunda capa) y 6e.
 - **Fase 6a hecha (aspecto de navegador)**: efecto sin pantalla completa (barra de estado visible), marco decorativo (`BrowserChrome.kt`: Safari con barra inferior que se esconde al bajar en iOS, Chrome en Android), zona oculta del menú arriba-centro (pulsación larga en la barra de URL; sin marco, zona invisible 180×64). Pendientes 6b-6e en `docs/SPEC.md` §10.
 - **Fase 4 (iOS) escrita, pendiente de verificar en el iPhone**: `WKWebView` en Swift + puente Kotlin (ver «iOS»). No se puede compilar en Windows: el primer build de Actions dirá si compila.
@@ -166,3 +167,10 @@ Si la app lleva una página de «Instrucciones» de cara al usuario final, mante
 - App: `SiteSettings.auto` = «Armado desde el inicio» (true) o «con gesto secreto» (false). `EffectScreen.armedNow` conmuta con volumen / esquina inferior derecha y llama a `vibrateFeedback(armed)` (Android `Vibrator`, permiso VIBRATE; iOS `UINotificationFeedbackGenerator` en Swift). Ajuste general «Vibración al armar» (`ForceStore.haptics`).
 - `ForcerWebView.effectArmed` sustituye a `triggerNonce`. Las actuals usan la config vigente (`rememberUpdatedState`) en cada carga.
 - Prueba determinista en emulador: añadir un sitio `file:///android_asset/test/page.html` (página de pruebas con un «logo» fijo que NO es de la lista).
+
+## Ficha en segunda capa (6c)
+- Preparar: el motor guarda `detailUrl` = el enlace que envuelve la tarjeta (`detailHref`; descarta `#`, `javascript:` y la propia página). Si no sirve (p. ej. la ficha de Google Imágenes es un panel de la misma página): abrir el objeto y pulsar «Fijar ficha» en la barra de Preparar (guarda la página actual; pisa la detectada). El diálogo y la tarjeta del sitio muestran «Con ficha».
+- Efecto: al forzar, el motor llama a `OmniBridge.onForced(detailUrl)` (una vez) y la app abre `DetailLayer`: un segundo navegador por ENCIMA, con marco y «atrás»; la lista queda intacta detrás con el elemento ya sustituido. Cerrar: botón «atrás» del marco, tecla atrás (Android; `BackHandler` de la capa 1) o arrastre desde el borde izquierdo (iOS, `UIScreenEdgePanGestureRecognizer` si la ficha no tiene historial). La capa 1 no lleva motor (sin config no se inyecta).
+- iOS: `WebOverlayModel.layers: [Int: WebLayer]` (0 principal, 1 ficha); `createWebView(..., layer:, ...)`. Las esquinas ocultas son solo de la capa 0 y desaparecen mientras haya ficha. Sin ficha, el forzaje sustituye sin abrir nada.
+- Pruebas: la página local de pruebas lleva enlaces `detail.html?n=N` y existe `web/test/detail.html` (se copia a `dist/test/` en el build). En esa página los enlaces no navegan: un `click` de la web se anota en `window.__linkClicked`.
+- Riesgo pendiente de validar con las webs reales: la ficha de Google Imágenes (usar «Fijar ficha») y que las fichas de YouTube/Amazon se abran bien en la segunda capa sin sesión.

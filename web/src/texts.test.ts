@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { isListItem } from './candidate';
+import { detailHref } from './capture';
 import { applySnapshot, applyTexts, collectTexts, findTextContainer, imageAsDataUrl, mediaUrl, snapshotCard } from './apply';
 
 const card = (n: number) =>
@@ -271,5 +272,26 @@ describe('isListItem (solo elementos de un listado)', () => {
     const img = document.getElementById('i')!;
     img.getBoundingClientRect = () => ({ width: 20, height: 20, top: 0, left: 0, right: 20, bottom: 20, x: 0, y: 0 } as DOMRect);
     expect(isListItem({ media: img, card: img.parentElement! })).toBe(false);
+  });
+});
+
+describe('detailHref (página de la ficha)', () => {
+  it('toma el enlace que envuelve el medio', () => {
+    document.body.innerHTML = '<a href="https://x.test/item/1"><img id="i" src="a.jpg"></a>';
+    expect(detailHref(document.getElementById('i')!)).toBe('https://x.test/item/1');
+  });
+  it('si no lo envuelve, el primer enlace de su tarjeta', () => {
+    document.body.innerHTML = '<div class="c"><img id="i" src="a.jpg"><h3><a href="https://x.test/item/2">Título</a></h3></div>';
+    expect(detailHref(document.getElementById('i')!)).toBe('https://x.test/item/2');
+  });
+  it('descarta # , javascript: y enlaces vacíos', () => {
+    document.body.innerHTML = '<div><a href="#"><img id="a" src="a.jpg"></a><a href="javascript:void(0)"><img id="b" src="b.jpg"></a><a href=""><img id="c" src="c.jpg"></a></div>';
+    expect(detailHref(document.getElementById('a')!)).toBeNull();
+    expect(detailHref(document.getElementById('b')!)).toBeNull();
+    expect(detailHref(document.getElementById('c')!)).toBeNull();
+  });
+  it('null si no hay ningún enlace', () => {
+    document.body.innerHTML = '<div><img id="i" src="a.jpg"></div>';
+    expect(detailHref(document.getElementById('i')!)).toBeNull();
   });
 });

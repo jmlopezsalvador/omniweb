@@ -19,6 +19,8 @@ export interface OmniConfig {
    * 'auto' (heredado): al parar el scroll. 'manual': solo con OmniWeb.trigger().
    */
   mode?: 'tap' | 'auto' | 'manual';
+  /** Página de la ficha del objeto: al forzar se avisa a la app para que la abra en una segunda capa. */
+  detailUrl?: string;
   /** Modo 'tap': ¿empieza armado? Si no, hay que llamar a `OmniWeb.setArmed(true)` (activación secreta). */
   armed?: boolean;
 }
@@ -108,6 +110,8 @@ function install(win: Window & typeof globalThis) {
   function forceAt(c: Candidate): boolean {
     if (!cfg || forced) return false;
     guard = true;
+    // Avisar a la app (abre la ficha encima). Se hace al final de forceAt, tras sustituir la tarjeta.
+    const notify = () => (win as unknown as { OmniBridge?: { onForced?(u: string): void } }).OmniBridge?.onForced?.(cfg?.detailUrl ?? '');
     if (cfg.html) {
       const snap = applySnapshot(c.media, cfg.html, cfg.imageUrl);
       if (snap) {
@@ -116,6 +120,7 @@ function install(win: Window & typeof globalThis) {
         forced = { media: snap.main, card: snap.container, isApplied: snap.isApplied, html: cfg.html, observer };
         console.log('[OmniWeb] forzado (instantánea)', snap.main.tagName, Math.round(snap.container.getBoundingClientRect().height) + 'px');
         setTimeout(() => (guard = false), 0);
+        notify();
         return true;
       }
     }
@@ -148,6 +153,7 @@ function install(win: Window & typeof globalThis) {
       if (!forced) return self.disconnect();
       if (!forced.media.isConnected) reapply();
     }).observe(doc.body, { childList: true, subtree: true });
+    notify();
     return true;
   }
 

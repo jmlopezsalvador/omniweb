@@ -36,11 +36,11 @@
     c.dataset.n = i;
     var kind = i % 3;
     if (kind === 0) {
-      c.innerHTML = '<img loading="lazy" src="' + ph(i) + '" srcset="' + ph(i) + ' 1x" alt="Foto ' + i + '">';
+      c.innerHTML = '<a href="detail.html?n=' + i + '"><img loading="lazy" src="' + ph(i) + '" srcset="' + ph(i) + ' 1x" alt="Foto ' + i + '"></a>';
     } else if (kind === 1) {
-      c.innerHTML = '<picture><source srcset="' + ph(i) + '" type="image/svg+xml"><img src="' + ph(i) + '" alt="Foto ' + i + '"></picture>';
+      c.innerHTML = '<a href="detail.html?n=' + i + '"><picture><source srcset="' + ph(i) + '" type="image/svg+xml"><img src="' + ph(i) + '" alt="Foto ' + i + '"></picture></a>';
     } else {
-      c.innerHTML = '<div class="bg" style="background-image:url(\'' + ph(i) + '\')"></div>';
+      c.innerHTML = '<a href="detail.html?n=' + i + '"><div class="bg" style="background-image:url(\'' + ph(i) + '\')"></div></a>';
     }
     c.insertAdjacentHTML('beforeend', '<h3>Título original ' + i + '</h3><div class="src">Fuente ' + i + '</div>');
     return c;
@@ -49,6 +49,12 @@
   more();
   new IntersectionObserver(function (e) { if (e[0].isIntersecting) more(); }, { rootMargin: '1500px' })
     .observe(document.getElementById('sentinel'));
+
+  // Los enlaces de las tarjetas no navegan en las pruebas: se anota el clic (si llega a la web)
+  document.addEventListener('click', function (e) {
+    var a = e.target.closest && e.target.closest('a[href]');
+    if (a) { e.preventDefault(); window.__linkClicked = a.getAttribute('href'); }
+  });
 
   // Imita webs como YouTube móvil: «navegan» con pointerup/touchend, no con click
   if (params.get('navonpointer') === '1') {

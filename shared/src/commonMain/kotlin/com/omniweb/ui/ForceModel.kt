@@ -11,6 +11,8 @@ data class Capture(
     val texts: List<String>,
     /** Instantánea HTML de la tarjeta (null si no era clonable: en ese caso se usan los textos). */
     val html: String? = null,
+    /** Página de la ficha del elemento (el enlace de su tarjeta), si el motor la encontró. */
+    val detailUrl: String? = null,
     val pageUrl: String,
     val aspect: Float,
 )
@@ -21,13 +23,15 @@ data class ForcedItem(
     val texts: List<String>,
     /** Instantánea HTML de la tarjeta capturada; el efecto la reinserta tal cual (prioridad sobre `texts`). */
     val html: String? = null,
-    /** Página donde se capturó; el modo efecto la abre ya preparada. */
+    /** Ficha del objeto: al forzar se abre en una segunda capa por encima de la lista (RF-26/27). null = no se abre nada. */
+    val detailUrl: String? = null,
+    /** Página donde se capturó (informativa: el efecto abre el inicio del sitio). */
     val pageUrl: String,
     val aspect: Float,
 )
 
 /** Lo mínimo de un forzaje para pintar la lista: sin leer la imagen (pueden ser MB). */
-data class ForcedSummary(val title: String)
+data class ForcedSummary(val title: String, val hasDetail: Boolean = false)
 
 /** Ajustes de un sitio (valen para preparar y para el efecto). */
 data class SiteSettings(
@@ -61,6 +65,12 @@ fun normalizeUrl(input: String): String {
 /** Nombre por defecto de un sitio añadido: el dominio (sin www) o, en archivos locales, el nombre del fichero. */
 fun siteNameFor(url: String): String =
     if (url.startsWith("file://")) url.substringAfterLast('/').ifBlank { url } else displayHost(url)
+
+/** URL abreviada para mostrar en textos: sin esquema ni `www.`, recortada. */
+fun shortUrl(url: String, max: Int = 46): String {
+    val t = url.substringAfter("://", url).removePrefix("www.")
+    return if (t.length > max) t.take(max) + "…" else t
+}
 
 private val INTERNAL_SCHEMES = setOf("http", "https", "about", "data", "blob", "file", "javascript")
 
@@ -142,7 +152,10 @@ class ForceStore(private val prefs: KeyValueStore, private val blobs: BlobStore)
      */
     fun summary(siteId: String): ForcedSummary? {
         if (prefs.getLong("f.$siteId.n", 0L) <= 0L) return null
-        return ForcedSummary(prefs.getString("f.$siteId.t0")?.takeIf { it.isNotBlank() } ?: "imagen")
+        return ForcedSummary(
+            title = prefs.getString("f.$siteId.t0")?.takeIf { it.isNotBlank() } ?: "imagen",
+            hasDetail = !prefs.getString("f.$siteId.detail").isNullOrBlank(),
+        )
     }
 
     fun load(siteId: String): ForcedItem? {
@@ -155,6 +168,7 @@ class ForceStore(private val prefs: KeyValueStore, private val blobs: BlobStore)
             imageData = image,
             texts = texts,
             html = (blobs.read("f.$siteId.html") ?: prefs.getString("f.$siteId.html"))?.takeIf { it.isNotEmpty() },
+            detailUrl = prefs.getString("f.$siteId.detail")?.takeIf { it.isNotBlank() },
             pageUrl = prefs.getString("f.$siteId.page") ?: "",
             aspect = prefs.getLong("f.$siteId.aspect", 1000L) / 1000f,
         )
@@ -168,11 +182,13 @@ class ForceStore(private val prefs: KeyValueStore, private val blobs: BlobStore)
         prefs.putLong("f.$siteId.n", item.texts.size.toLong())
         item.texts.forEachIndexed { i, t -> prefs.putString("f.$siteId.t$i", t) }
         prefs.putString("f.$siteId.page", item.pageUrl)
+        prefs.putString("f.$siteId.detail", item.detailUrl ?: "")
         prefs.putLong("f.$siteId.aspect", (item.aspect * 1000).toLong())
     }
 
     fun clear(siteId: String) {
         prefs.putLong("f.$siteId.n", 0L)
+        prefs.putString("f.$siteId.detail", "")
         blobs.delete("f.$siteId.image")
         blobs.delete("f.$siteId.html")
         prefs.putString("f.$siteId.image", "")

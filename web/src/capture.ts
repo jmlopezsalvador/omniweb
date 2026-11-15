@@ -1,12 +1,38 @@
 import { collectTexts, imageAsDataUrl, mediaUrl, snapshotCard } from './apply';
 import { findCandidate } from './candidate';
 
+/**
+ * URL de la «ficha» del elemento: el enlace que lo envuelve (o el primero de su tarjeta). Se descartan los que no llevan a
+ * otra página (`#`, `javascript:`, la propia página). null si no hay.
+ */
+export function detailHref(media: Element): string | null {
+  const doc = media.ownerDocument;
+  const here = doc.location?.href.split('#')[0];
+  const ok = (a: Element | null): string | null => {
+    if (!a) return null;
+    const raw = a.getAttribute('href') ?? '';
+    if (!raw || raw.startsWith('#') || /^javascript:/i.test(raw)) return null;
+    const abs = (a as HTMLAnchorElement).href;
+    return abs && abs.split('#')[0] !== here && /^https?:|^file:/i.test(abs) ? abs : null;
+  };
+  const own = ok(media.closest('a[href]'));
+  if (own) return own;
+  let el: Element | null = media.parentElement;
+  for (let d = 0; el && d < 6 && el !== doc.body; d++, el = el.parentElement) {
+    const found = ok(el.querySelector('a[href]'));
+    if (found) return found;
+  }
+  return null;
+}
+
 export interface Capture {
   imageUrl: string;
   imageData: string | null;
   texts: string[];
   /** Instantánea HTML de la tarjeta (o null si no es clonable). */
   html: string | null;
+  /** Página de la ficha del elemento (ver `detailHref`). */
+  detailUrl: string | null;
   pageUrl: string;
   aspect: number;
 }
@@ -47,6 +73,7 @@ export function createCaptureMode(win: Window, onCapture: (c: Capture) => void):
       imageData: imageAsDataUrl(cand.media),
       texts: collectTexts(cand.media),
       html: snapshotCard(cand.media),
+      detailUrl: detailHref(cand.media),
       pageUrl: win.location.href,
       aspect: r.height ? r.width / r.height : 1,
     });

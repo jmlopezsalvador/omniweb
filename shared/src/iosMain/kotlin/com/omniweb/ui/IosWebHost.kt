@@ -14,7 +14,13 @@ import platform.UIKit.UIView
 /** Eventos del navegador hacia Compose. Swift los llama siempre en el hilo principal. */
 interface WebViewCallbacks {
     /** El motor JS entregó el elemento tocado en modo captura. */
-    fun onCapture(imageUrl: String, imageData: String?, texts: List<String>, html: String?, pageUrl: String, aspect: Double)
+    fun onCapture(imageUrl: String, imageData: String?, texts: List<String>, html: String?, detailUrl: String?, pageUrl: String, aspect: Double)
+
+    /** El motor ha forzado: ficha del objeto (vacía si no hay). */
+    fun onForced(url: String)
+
+    /** Gesto de «atrás» (arrastre desde el borde izquierdo) en la capa de la ficha. */
+    fun onBack()
 
     /** URL y título actuales (barra de URL decorativa). */
     fun onPageInfo(url: String, title: String)
@@ -40,8 +46,8 @@ interface VoidCallback {
 }
 
 interface WebViewHost {
-    /** Crea el navegador. `effectGestures`: añade las esquinas ocultas nativas (solo en el efecto). */
-    fun createWebView(desktop: Boolean, effectGestures: Boolean, callbacks: WebViewCallbacks): UIView
+    /** Crea el navegador. `effectGestures`: añade las esquinas ocultas nativas (solo en el efecto). `layer`: 0 principal, 1 ficha (encima). */
+    fun createWebView(desktop: Boolean, effectGestures: Boolean, layer: Int, callbacks: WebViewCallbacks): UIView
 
     /**
      * El navegador es una capa NATIVA (SwiftUI) por encima de Compose, no un `UIKitView`: así los toques y el scroll van

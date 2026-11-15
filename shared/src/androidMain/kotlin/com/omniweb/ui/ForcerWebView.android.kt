@@ -32,6 +32,7 @@ internal fun parseCapture(json: String): Capture {
         imageData = if (o.isNull("imageData")) null else o.getString("imageData"),
         texts = texts,
         html = if (o.isNull("html")) null else o.optString("html").takeIf { it.isNotEmpty() },
+        detailUrl = if (o.isNull("detailUrl")) null else o.optString("detailUrl").takeIf { it.isNotBlank() },
         pageUrl = o.optString("pageUrl"),
         aspect = o.optDouble("aspect", 1.0).toFloat(),
     )
@@ -55,12 +56,15 @@ actual fun ForcerWebView(
     covered: Boolean,
     onPageInfo: ((String, String) -> Unit)?,
     onScroll: ((Boolean) -> Unit)?,
+    onForced: ((String) -> Unit)?,
+    layer: Int,
 ) {
     val latestCapture by rememberUpdatedState(onCapture)
     val latestArmed by rememberUpdatedState(armed)
     val latestInfo by rememberUpdatedState(onPageInfo)
     val latestConfig by rememberUpdatedState(config)
     val latestScroll by rememberUpdatedState(onScroll)
+    val latestForced by rememberUpdatedState(onForced)
     var webView by remember { mutableStateOf<WebView?>(null) }
     var canGoBack by remember { mutableStateOf(false) }
 
@@ -103,6 +107,12 @@ actual fun ForcerWebView(
                         val c = runCatching { parseCapture(json) }.getOrNull() ?: return
                         post { latestCapture(c) }
                     }
+                    @JavascriptInterface
+                    fun onForced(url: String) {
+                        if (captureMode) return
+                        post { latestForced?.invoke(url) }
+                    }
+
                     @JavascriptInterface
                     fun onScroll(dir: String) {
                         if (captureMode) return

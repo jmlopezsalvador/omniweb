@@ -36,6 +36,12 @@ class JsQuoteTest {
         assertEquals("{imageUrl:\"u\",texts:[],idleMs:450,mode:'tap',armed:true}", js)
     }
 
+    @Test fun detailUrlIsIncludedOnlyWhenPresent() {
+        assertTrue(ForceConfig("u", detailUrl = "https://x.test/f?a=1&b=\"2\"").toJs().contains("detailUrl:\"https://x.test/f?a=1&b=\\\"2\\\"\","))
+        assertFalse(ForceConfig("u").toJs().contains("detailUrl"))
+        assertFalse(ForceConfig("u", detailUrl = " ").toJs().contains("detailUrl"))
+    }
+
     @Test fun reportScrollIsOptIn() {
         assertTrue(ForceConfig("u", reportScroll = true).toJs().contains("reportScroll:true,"))
         assertFalse(ForceConfig("u").toJs().contains("reportScroll"))

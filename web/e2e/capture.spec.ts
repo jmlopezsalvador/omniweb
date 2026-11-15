@@ -35,6 +35,7 @@ test('captura: el toque entrega imagen, textos y aspecto, y no navega ni activa 
   expect(cap.imageUrl).toContain('data:image/svg+xml');
   expect(cap.imageData).toContain('data:image/svg+xml');
   expect(cap.aspect).toBeGreaterThan(1);
+  expect(cap.detailUrl).toMatch(/detail\.html\?n=4$/); // el enlace que envuelve la tarjeta
   expect(cap.pageUrl).toContain('page.html');
   // la tarjeta queda resaltada
   const outlined = await page.evaluate(() => document.querySelectorAll('[style*="outline"]').length);

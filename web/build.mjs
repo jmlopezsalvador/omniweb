@@ -12,4 +12,5 @@ await build({
   outfile: 'dist/omniweb.js',
 });
 cpSync('test/page.html', 'dist/test/page.html');
+cpSync('test/detail.html', 'dist/test/detail.html');
 console.log('OK dist/omniweb.js');
