@@ -65,6 +65,9 @@ expect fun ForcerWebView(
     onForced: ((url: String) -> Unit)? = null,
     /** Capa del navegador: 0 = el principal, 1 = la ficha encima (en iOS son capas nativas distintas). */
     layer: Int = 0,
+    /** Cada vez que cambia (y es > 0) el navegador va una página atrás / adelante (botones de la barra inferior). */
+    backNonce: Int = 0,
+    forwardNonce: Int = 0,
 )
 
 /** Descarga una imagen y la devuelve como data: URL (null si falla). Android: HttpURLConnection. */

@@ -102,25 +102,31 @@ export interface FichaOptions {
   skip?: (m: Element) => boolean;
 }
 
+/** ¿Vale este medio como nuevo, o es de la lista de antes (que no cambió de tamaño ni estaba oculto)? */
+function isNew(m: Element, r: DOMRect, before: Map<Element, number> | null, allowOld: boolean): boolean {
+  if (!before || allowOld) return true;
+  const a0 = before.get(m);
+  // ya estaba al tocar: solo vale si ahora es mucho mayor (o estaba oculto): la web lo reutilizó para la ficha
+  return !(a0 !== undefined && a0 > 0 && r.width * r.height < a0 * GROWTH);
+}
+
 /**
  * Medio principal de la ficha: el mayor medio visible en pantalla que no esté ya forzado ni sea de la lista de antes.
  * En un documento nuevo (`before` null) vale cualquiera; en una página que no se recarga (panel, SPA) solo los medios nuevos.
+ * Entre varios (las fichas apilan un marcador grande detrás y la imagen real encima) gana el que SE VE: el que recibe el toque
+ * en su centro; solo si ninguno lo cumple valen los que quedan tapados por una capa de la propia web.
  */
 export function findFichaMedia(doc: Document, o: FichaOptions): Candidate | null {
   const win = doc.defaultView!;
   const vw = win.innerWidth;
   const vh = win.innerHeight;
   const min = (o.minFrac ?? 0.12) * vw * vh;
-  let best: { m: Element; area: number } | null = null;
+  let best: { m: Element; area: number; direct: boolean } | null = null;
   for (const m of allMedia(doc)) {
     if (m.closest(`[${FORCED_ATTR}]`) || m.hasAttribute(FORCED_ATTR)) continue;
     if (o.skip?.(m)) continue;
     const r = m.getBoundingClientRect();
-    if (o.before && !o.allowOld) {
-      const a0 = o.before.get(m);
-      // ya estaba al tocar: solo vale si ahora es mucho mayor (o estaba oculto): la web lo reutilizó para la ficha
-      if (a0 !== undefined && a0 > 0 && r.width * r.height < a0 * GROWTH) continue;
-    }
+    if (!isNew(m, r, o.before, o.allowOld)) continue;
     const area = Math.max(0, Math.min(r.right, vw) - Math.max(r.left, 0)) * Math.max(0, Math.min(r.bottom, vh) - Math.max(r.top, 0));
     if (area < min || r.top > vh * 0.85) continue;
     // visible de verdad: lo que hay en su centro es él mismo (o algo suyo), no un panel que lo tape
@@ -128,7 +134,60 @@ export function findFichaMedia(doc: Document, o: FichaOptions): Candidate | null
     const cy = Math.min(Math.max(r.top + r.height / 2, 0), vh - 1);
     const top = doc.elementFromPoint(cx, cy);
     if (!top || !ownsPoint(m, top, r.width * r.height)) continue;
-    if (!best || area > best.area) best = { m, area };
+    const direct = top === m || m.contains(top);
+    if (!best || (direct && !best.direct) || (direct === best.direct && area > best.area)) best = { m, area, direct };
   }
   return best ? { media: best.m, card: best.m.parentElement ?? best.m } : null;
+}
+
+function overlapArea(a: DOMRect, b: DOMRect): number {
+  return Math.max(0, Math.min(a.right, b.right) - Math.max(a.left, b.left)) * Math.max(0, Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top));
+}
+
+/**
+ * Otros medios de la ficha que ocupan el MISMO hueco que el principal (el marcador de detrás y la imagen real de delante, o la
+ * miniatura que sustituye a la grande cuando termina de cargar). Se sustituyen todos para que, sea cual sea la que se vea,
+ * salga lo forzado. Los vecinos del carrusel (a un lado, fuera de ese hueco) no cuentan.
+ */
+export function findStackedMedia(
+  doc: Document,
+  anchor: Element,
+  rect: DOMRect,
+  o: { before: Map<Element, number> | null; skip?: (m: Element) => boolean },
+): Element[] {
+  const win = doc.defaultView!;
+  const base = rect.width * rect.height;
+  if (base <= 0 || !anchor.isConnected) return [];
+  const out: Element[] = [];
+  for (const m of allMedia(doc)) {
+    if (m.closest(`[${FORCED_ATTR}]`) || m.hasAttribute(FORCED_ATTR)) continue;
+    if (o.skip?.(m)) continue;
+    const r = m.getBoundingClientRect();
+    const area = r.width * r.height;
+    if (area < base * 0.25 || area > base * 2.5) continue;
+    if (!isNew(m, r, o.before, false)) continue;
+    if (overlapArea(r, rect) < Math.min(area, base) * 0.6) continue;
+    // del mismo componente: comparte con la imagen principal un contenedor no mucho mayor que ella (no «la página entera»;
+    // así no se tocan las tarjetas de la lista que quedan detrás del panel)
+    let common: Element | null = anchor.parentElement;
+    while (common && !common.contains(m)) common = common.parentElement;
+    if (!common || common === doc.body || common === doc.documentElement) continue;
+    const cr = common.getBoundingClientRect();
+    if (cr.width * cr.height > base * 4.5) continue;
+    const cs = win.getComputedStyle(m);
+    if (cs.display === 'none' || cs.visibility === 'hidden') continue;
+    out.push(m);
+  }
+  return out;
+}
+
+/** ¿Se está mostrando el elemento? (conectado, con tamaño y dentro de la pantalla). */
+export function isShown(el: Element): boolean {
+  if (!el.isConnected) return false;
+  const win = el.ownerDocument.defaultView!;
+  const r = el.getBoundingClientRect();
+  if (r.width < 2 || r.height < 2) return false;
+  if (r.right <= 0 || r.bottom <= 0 || r.left >= win.innerWidth || r.top >= win.innerHeight) return false;
+  const cs = win.getComputedStyle(el);
+  return cs.display !== 'none' && cs.visibility !== 'hidden';
 }

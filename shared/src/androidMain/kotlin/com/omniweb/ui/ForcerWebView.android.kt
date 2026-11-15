@@ -58,6 +58,8 @@ actual fun ForcerWebView(
     onScroll: ((Boolean) -> Unit)?,
     onForced: ((String) -> Unit)?,
     layer: Int,
+    backNonce: Int,
+    forwardNonce: Int,
 ) {
     val latestCapture by rememberUpdatedState(onCapture)
     val latestArmed by rememberUpdatedState(armed)
@@ -67,6 +69,7 @@ actual fun ForcerWebView(
     val latestForced by rememberUpdatedState(onForced)
     var webView by remember { mutableStateOf<WebView?>(null) }
     var canGoBack by remember { mutableStateOf(false) }
+    var configuredPage = false // la configuración del efecto ya se envió a la página actual (onPageCommitVisible)
 
     // Armar/desarmar la captura sin recargar la página
     LaunchedEffect(armed, webView) {
@@ -79,6 +82,10 @@ actual fun ForcerWebView(
     LaunchedEffect(effectArmed, webView) {
         if (!captureMode) webView?.evaluateJavascript("window.OmniWeb&&OmniWeb.setArmed($effectArmed)", null)
     }
+
+    // Botones atrás / adelante del marco
+    LaunchedEffect(backNonce) { if (backNonce > 0) webView?.let { if (it.canGoBack()) it.goBack() } }
+    LaunchedEffect(forwardNonce) { if (forwardNonce > 0) webView?.let { if (it.canGoForward()) it.goForward() } }
 
     BackHandler {
         val wv = webView
@@ -131,12 +138,22 @@ actual fun ForcerWebView(
                     // El motor (~20 KB, idempotente) entra al empezar la página; la configuración, que puede llevar
                     // MB de imagen, solo al terminar (antes se evaluaba dos veces por página).
                     override fun onPageStarted(view: WebView, u: String?, favicon: Bitmap?) {
+                        configuredPage = false
                         if (captureMode || latestConfig != null) view.evaluateJavascript("if(!window.OmniWeb){$bundle}", null)
+                    }
+                    // La ficha puede ser OTRA página (Amazon) y `onPageFinished` tarda mucho (la sirve por trozos): el efecto se
+                    // configura en cuanto la página empieza a verse. El motor ignora la segunda configuración idéntica.
+                    override fun onPageCommitVisible(view: WebView, u: String?) {
+                        val c = latestConfig
+                        if (!captureMode && c != null) {
+                            configuredPage = true
+                            view.evaluateJavascript("if(!window.OmniWeb){$bundle}OmniWeb.configure(${c.toJs()});", null)
+                        }
                     }
                     override fun onPageFinished(view: WebView, u: String?) {
                         val start = when {
                             captureMode -> if (latestArmed) "OmniWeb.startCapture();" else ""
-                            latestConfig != null -> "OmniWeb.configure(${latestConfig!!.toJs()});"
+                            latestConfig != null -> if (configuredPage) "" else "OmniWeb.configure(${latestConfig!!.toJs()});"
                             else -> ""
                         }
                         if (start.isNotEmpty()) view.evaluateJavascript("if(!window.OmniWeb){$bundle}$start", null)

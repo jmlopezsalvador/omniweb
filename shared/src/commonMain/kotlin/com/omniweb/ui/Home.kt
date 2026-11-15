@@ -78,10 +78,13 @@ private val FavBar = Color(0xFFF9F9F9)
 private val FavBlue = Color(0xFF007AFF)
 
 /**
- * Inicio de la app. Barra inferior con tres pestañas:
- * - Favoritos: la ve el espectador. Solo iconos de los sitios; tocar uno lanza el efecto (si está preparado).
+ * Inicio de la app.
+ * - Favoritos: la ve el espectador. Va dentro del MISMO marco de navegador que el efecto (barra de estado, barra de URL arriba y,
+ *   en iPhone, barra de herramientas abajo) y SIN la barra de pestañas de la app. Solo iconos de los sitios; tocar uno lanza el
+ *   efecto (si está preparado). Se llega a Ajustes con una pulsación larga en la barra de URL.
  * - Sitios: la zona del mago. Lista con logo, estado y botones Preparar / Efecto / ajustes.
  * - Ajustes: opciones generales.
+ * Sitios y Ajustes llevan abajo la barra de pestañas (con «Favoritos» para volver a la vista del espectador).
  */
 @Composable
 internal fun HomeScreen(
@@ -96,12 +99,15 @@ internal fun HomeScreen(
     onChanged: () -> Unit,
     onMessage: (String?) -> Unit,
 ) {
-    Column(Modifier.fillMaxSize().background(if (tab == HomeTab.Favorites) FavBg else MaterialTheme.colorScheme.background)) {
+    if (tab == HomeTab.Favorites) {
+        FavoritesFrame(store, blobs, version, onEffect, onAdmin = { onTab(HomeTab.Settings) })
+        return
+    }
+    Column(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
         Box(Modifier.weight(1f).fillMaxWidth()) {
             when (tab) {
-                HomeTab.Favorites -> FavoritesTab(store, blobs, version, onEffect)
                 HomeTab.Sites -> SitesTab(store, blobs, version, message, onPrepare, onEffect, onChanged, onMessage)
-                HomeTab.Settings -> SettingsTab(store, version, onChanged, onMessage)
+                else -> SettingsTab(store, version, onChanged, onMessage)
             }
         }
         BottomTabs(tab, onTab)
@@ -110,14 +116,40 @@ internal fun HomeScreen(
 
 // ───────────────────────── Favoritos (lo ve el espectador) ─────────────────────────
 
+/** Marco de navegador de Favoritos: igual que el del efecto (barra superior; abajo la de Safari en iPhone). */
 @Composable
-private fun FavoritesTab(store: ForceStore, blobs: BlobStore, version: Int, onEffect: (Site) -> Unit) {
-    val style = remember(version) { store.homeStyle() }
-    if (style == HOME_GOOGLE) {
-        GoogleHome(store, blobs, version, onEffect)
-        return
+private fun FavoritesFrame(store: ForceStore, blobs: BlobStore, version: Int, onEffect: (Site) -> Unit, onAdmin: () -> Unit) {
+    val ios = isIosPlatform()
+    val google = remember(version) { store.homeStyle() } == HOME_GOOGLE
+    var pageUrl by remember { mutableStateOf(GOOGLE_HOME_URL) }
+    var backNonce by remember { mutableStateOf(0) }
+    var forwardNonce by remember { mutableStateOf(0) }
+    Column(Modifier.fillMaxSize().background(Color.Black)) {
+        // Pulsación larga en la barra de URL = zona oculta que lleva a Ajustes
+        BrowserTopBar(ios = ios, url = pageUrl, onMenu = onAdmin, hint = if (google) null else "Buscar o introducir sitio web")
+        Box(Modifier.weight(1f).fillMaxWidth()) {
+            if (google) {
+                GoogleHome(store, blobs, version, onEffect, onPageUrl = { pageUrl = it }, backNonce = backNonce, forwardNonce = forwardNonce)
+            } else {
+                FavoritesGrid(store, blobs, version, onEffect)
+            }
+        }
+        if (ios) {
+            BrowserBottomBar(
+                visible = true,
+                onBack = if (google) ({ backNonce++ }) else null,
+                onForward = if (google) ({ forwardNonce++ }) else null,
+            )
+        } else {
+            Box(Modifier.fillMaxWidth().navigationBarsPadding())
+        }
     }
+}
+
+@Composable
+private fun FavoritesGrid(store: ForceStore, blobs: BlobStore, version: Int, onEffect: (Site) -> Unit) {
     val sites = remember(version) { store.sites() }
+    Box(Modifier.fillMaxSize().background(FavBg)) {
     Column(Modifier.fillMaxSize().padding(horizontal = 16.dp)) {
         Text(
             "Favoritos",
@@ -138,6 +170,7 @@ private fun FavoritesTab(store: ForceStore, blobs: BlobStore, version: Int, onEf
             }
         }
     }
+    }
 }
 
 /**
@@ -145,7 +178,15 @@ private fun FavoritesTab(store: ForceStore, blobs: BlobStore, version: Int, onEf
  * app (la inserta el motor). Tocar un sitio lanza su efecto si está preparado.
  */
 @Composable
-private fun GoogleHome(store: ForceStore, blobs: BlobStore, version: Int, onEffect: (Site) -> Unit) {
+private fun GoogleHome(
+    store: ForceStore,
+    blobs: BlobStore,
+    version: Int,
+    onEffect: (Site) -> Unit,
+    onPageUrl: (String) -> Unit,
+    backNonce: Int,
+    forwardNonce: Int,
+) {
     val sites = remember(version) { store.sites() }
     var icons by remember(sites) { mutableStateOf<Map<String, String?>?>(null) }
     LaunchedEffect(sites) {
@@ -170,6 +211,9 @@ private fun GoogleHome(store: ForceStore, blobs: BlobStore, version: Int, onEffe
         onExit = null,
         modifier = Modifier.fillMaxSize(),
         effectArmed = false,
+        onPageInfo = { u, _ -> if (u.isNotBlank()) onPageUrl(u) },
+        backNonce = backNonce,
+        forwardNonce = forwardNonce,
         onForced = { msg ->
             // El motor avisa con «omni:launch:<id>»; sin forzaje preparado no se hace nada (el espectador no ve nada raro)
             if (msg.startsWith(LAUNCH_PREFIX)) {
@@ -396,8 +440,8 @@ private fun SettingsTab(store: ForceStore, version: Int, onChanged: () -> Unit, 
                 Text("Cómo se usa", style = MaterialTheme.typography.titleMedium)
                 Text(
                     """1. Sitios → Preparar: busca en el sitio y toca el elemento de la lista. Después entra en su ficha (como lo haría el espectador) y captura su imagen principal.
-2. Favoritos (lo que ve el espectador): al tocar un icono se lanza el efecto del sitio (si está preparado). Se abre el inicio del sitio. Con el truco armado, quien desliza, para y pulsa un elemento de la lista lo ve sustituido; la web abre su ficha con lo que capturaste.
-3. Gestos ocultos: pulsación larga en la barra de URL (menú) y botón de volumen o esquina inferior derecha (armar).""",
+2. Favoritos (lo que ve el espectador, sin barra de pestañas): al tocar un icono se lanza el efecto del sitio (si está preparado). Se abre el inicio del sitio. Con el truco armado, quien desliza, para y pulsa un elemento de la lista lo ve sustituido; la web abre su ficha con lo que capturaste.
+3. Gestos ocultos: en Favoritos, pulsación larga en la barra de URL = vuelves a Ajustes (con la barra de pestañas). En el efecto, pulsación larga en la barra de URL (menú) y botón de volumen o esquina inferior derecha (armar). Los botones atrás/adelante de la barra inferior funcionan: si la ficha es otra página, se puede volver.""",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -451,10 +495,9 @@ private fun SettingRow(title: String, subtitle: String, checked: Boolean, onChan
 
 @Composable
 private fun BottomTabs(selected: HomeTab, onSelect: (HomeTab) -> Unit) {
-    val light = selected == HomeTab.Favorites // en Favoritos la barra también es clara (la ve el espectador)
-    val active = if (light) FavBlue else MaterialTheme.colorScheme.primary
-    val idle = if (light) FavSub else MaterialTheme.colorScheme.onSurfaceVariant
-    Surface(color = if (light) FavBar else MaterialTheme.colorScheme.surface, modifier = Modifier.fillMaxWidth()) {
+    val active = MaterialTheme.colorScheme.primary
+    val idle = MaterialTheme.colorScheme.onSurfaceVariant
+    Surface(color = MaterialTheme.colorScheme.surface, modifier = Modifier.fillMaxWidth()) {
         Row(Modifier.navigationBarsPadding().height(62.dp), horizontalArrangement = Arrangement.SpaceEvenly, verticalAlignment = Alignment.CenterVertically) {
             TabItem("Favoritos", if (selected == HomeTab.Favorites) active else idle, { onSelect(HomeTab.Favorites) }) { c -> StarIcon(c) }
             TabItem("Sitios", if (selected == HomeTab.Sites) active else idle, { onSelect(HomeTab.Sites) }) { c -> ListIcon(c) }

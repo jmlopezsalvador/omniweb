@@ -47,6 +47,8 @@ actual fun ForcerWebView(
     onScroll: ((down: Boolean) -> Unit)?,
     onForced: ((url: String) -> Unit)?,
     layer: Int,
+    backNonce: Int,
+    forwardNonce: Int,
 ) {
     val host = iosWebHost
     if (host == null) {
@@ -143,6 +145,10 @@ actual fun ForcerWebView(
             host.loadUrl(v, url)
         }
     }
+
+    // Botones atrás / adelante del marco (el gesto de borde de iOS no es fácil de acertar)
+    LaunchedEffect(backNonce) { if (backNonce > 0) view?.let { host.goBack(it) } }
+    LaunchedEffect(forwardNonce) { if (forwardNonce > 0) view?.let { host.goForward(it) } }
 
     // Armar/desarmar la captura sin recargar; el script de arranque se actualiza para las próximas cargas
     LaunchedEffect(armed, view) {

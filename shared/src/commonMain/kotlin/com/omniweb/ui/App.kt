@@ -83,7 +83,10 @@ fun OmniWebRoot(prefs: KeyValueStore, blobs: BlobStore) {
         Surface(
             color = MaterialTheme.colorScheme.background,
             contentColor = MaterialTheme.colorScheme.onBackground,
-            modifier = Modifier.fillMaxSize().then(if (screen is Screen.EffectOf) Modifier else Modifier.statusBarsPadding()),
+            // El efecto y Favoritos llevan su propio marco de navegador (que ya ocupa la zona de la barra de estado)
+            modifier = Modifier.fillMaxSize().then(
+                if (screen is Screen.EffectOf || (screen is Screen.Home && homeTab == HomeTab.Favorites)) Modifier else Modifier.statusBarsPadding(),
+            ),
         ) {
             when (val s = screen) {
                 Screen.Home -> HomeScreen(
@@ -402,6 +405,8 @@ private fun EffectScreen(site: Site, item: ForcedItem, settings: SiteSettings, h
     var chrome by remember { mutableStateOf(settings.chrome) }
     var pageUrl by remember { mutableStateOf(site.startUrl) }
     var bottomVisible by remember { mutableStateOf(true) }
+    var backNonce by remember { mutableStateOf(0) }
+    var forwardNonce by remember { mutableStateOf(0) }
     val ios = isIosPlatform()
 
     VolumeKeyEffect(enabled = !realWeb && !menu) { activate() }
@@ -439,12 +444,19 @@ private fun EffectScreen(site: Site, item: ForcedItem, settings: SiteSettings, h
                 covered = menu,
                 onPageInfo = { url, _ -> if (url.isNotBlank()) pageUrl = url },
                 onScroll = { down -> bottomVisible = !down },
+                backNonce = backNonce,
+                forwardNonce = forwardNonce,
             )
             // Zonas ocultas en Android (en iOS son vistas nativas dentro de la capa del navegador)
             HiddenCorner(Modifier.align(Alignment.BottomEnd), onTap = { activate() })
             if (!chrome) HiddenCorner(Modifier.align(Alignment.TopCenter), onLongPress = { menu = true }, width = 180.dp, height = 64.dp)
         }
-        if (chrome && ios) BrowserBottomBar(visible = bottomVisible) else Box(Modifier.fillMaxWidth().navigationBarsPadding())
+        // Atrás / adelante FUNCIONAN: hay webs (Amazon) cuya ficha es otra página y el espectador debe poder volver
+        if (chrome && ios) {
+            BrowserBottomBar(visible = bottomVisible, onBack = { backNonce++ }, onForward = { forwardNonce++ })
+        } else {
+            Box(Modifier.fillMaxWidth().navigationBarsPadding())
+        }
     }
     }
 

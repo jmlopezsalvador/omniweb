@@ -275,6 +275,72 @@ export function applySnapshot(media: Element, html: string, imageUrl: string): {
   return s ? { container: r.container, ...s } : null;
 }
 
+export const OVERLAY_ATTR = 'data-omni-overlay';
+
+/** Los hijos originales de la tarjeta se quedan en su sitio pero transparentes: siguen recibiendo el toque. */
+function hideOriginals(container: Element, overlay: Element | null) {
+  for (const ch of Array.from(container.children)) {
+    if (ch === overlay) continue;
+    const h = ch as HTMLElement;
+    if (h.style.getPropertyValue('opacity') !== '0') h.style.setProperty('opacity', '0', 'important');
+  }
+}
+
+/** La capa de instantánea que cuelga de `container`, si está. */
+export function findOverlay(container: Element): Element | null {
+  return Array.from(container.children).find((c) => c.hasAttribute(OVERLAY_ATTR)) ?? null;
+}
+
+/** ¿Hay algún hijo original sin ocultar (la web repintó la tarjeta)? */
+export function overlayStale(container: Element): boolean {
+  const ov = findOverlay(container);
+  if (!ov) return true;
+  return Array.from(container.children).some((c) => c !== ov && (c as HTMLElement).style?.getPropertyValue('opacity') !== '0');
+}
+
+/**
+ * Variante «sobrepuesta» de la instantánea: en vez de VACIAR la tarjeta (se pierden los manejadores de la web: el enlace
+ * original, la apertura de su ficha), la tarjeta original se queda intacta pero transparente y encima se pinta la instantánea con
+ * la imagen capturada, sin recibir toques. El toque atraviesa la capa y la web abre su ficha como siempre.
+ * La capa lleva la clase de la tarjeta (el CSS de la web se le aplica) y ocupa exactamente su caja.
+ */
+export function applySnapshotOverlayAt(container: Element, html: string, imageUrl: string): { main: Element; isApplied: () => boolean } | null {
+  const doc = container.ownerDocument;
+  const host = container as HTMLElement;
+  findOverlay(container)?.remove();
+  const o = doc.createElement('div');
+  o.setAttribute(OVERLAY_ATTR, '1');
+  if (typeof host.className === 'string') o.className = host.className;
+  o.innerHTML = html;
+  const main = o.querySelector(`[${MAIN_ATTR}]`);
+  if (!main) return null;
+  main.removeAttribute(MAIN_ATTR);
+  o.style.cssText =
+    'position:absolute!important;left:0!important;top:0!important;right:auto!important;bottom:auto!important;width:100%!important;' +
+    'height:100%!important;margin:0!important;box-sizing:border-box!important;transform:none!important;pointer-events:none!important;';
+  o.querySelectorAll('*').forEach((e) => (e as HTMLElement).style?.setProperty('pointer-events', 'none', 'important'));
+  if (doc.defaultView!.getComputedStyle(host).position === 'static') host.style.setProperty('position', 'relative');
+  hideOriginals(container, null);
+  container.appendChild(o);
+  return { main, isApplied: applyImage(main, imageUrl) };
+}
+
+/** Si la web repinta la tarjeta, vuelve a ocultar los hijos nuevos (sin tocar la capa). */
+export function reHideOriginals(container: Element) {
+  hideOriginals(container, findOverlay(container));
+}
+
+export function applySnapshotOverlay(
+  media: Element,
+  html: string,
+  imageUrl: string,
+): { container: Element; main: Element; isApplied: () => boolean } | null {
+  const r = findTextContainer(media);
+  if (!r) return null;
+  const s = applySnapshotOverlayAt(r.container, html, imageUrl);
+  return s ? { container: r.container, ...s } : null;
+}
+
 /** URL de la imagen que muestra un medio (img/video poster/background-image), absoluta. */
 export function mediaUrl(el: Element): string | null {
   const kind = mediaKind(el);

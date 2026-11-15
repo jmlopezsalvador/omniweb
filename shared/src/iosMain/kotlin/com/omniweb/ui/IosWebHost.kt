@@ -61,6 +61,10 @@ interface WebViewHost {
 
     fun loadUrl(view: UIView, url: String)
 
+    /** Una página atrás / adelante en el historial del navegador (no hace nada si no hay). */
+    fun goBack(view: UIView)
+    fun goForward(view: UIView)
+
     /**
      * Script que se ejecuta al terminar de cargar cada página, DESPUÉS de inyectar el motor (`omniweb.js`, que Swift
      * inyecta al empezar el documento). Vacío = solo el motor, sin configurarlo.

@@ -34,7 +34,7 @@ async function showCard(page: Page, n: number) {
 }
 
 const forcedCard = (page: Page) =>
-  page.evaluate(() => document.querySelector('.card [data-omni-forced]')?.closest('.card')?.getAttribute('data-n') ?? null);
+  page.evaluate(() => document.querySelector('.card [data-omni-forced]')?.closest('.card[data-n]')?.getAttribute('data-n') ?? null);
 const heroBlue = (page: Page) => page.evaluate(() => (document.querySelector<HTMLImageElement>('#hero')?.getAttribute('src') ?? '').includes('blue'));
 
 test('panel (misma página): el toque llega a la web, la ficha sale con lo capturado y la lista queda sustituida detrás', async ({ page }) => {
@@ -149,7 +149,7 @@ test('una capa transparente de la web sobre la imagen de la ficha no impide sust
 });
 
 const forcedHref = (page: Page) =>
-  page.evaluate(() => document.querySelector('.card [data-omni-forced]')?.closest('.card')?.querySelector('a')?.getAttribute('href') ?? null);
+  page.evaluate(() => document.querySelector('.card [data-omni-forced]')?.closest('.card[data-n]')?.querySelector('a')?.getAttribute('href') ?? null);
 
 test('si la web recoloca la rejilla al apoyar el dedo, se sustituye la tarjeta TOCADA y no la que queda debajo al soltar', async ({ page }) => {
   await open(page, '?panel=1&shift=1');
@@ -167,4 +167,79 @@ test('si la web recicla la tarjeta al abrir la ficha, se sustituye la tarjeta to
   await page.mouse.click(p.x, p.y);
   await expect.poll(() => forcedHref(page)).not.toBeNull();
   expect(await forcedHref(page)).toBe('detail.html?n=5');
+});
+
+// Instantánea HTML de una tarjeta (la que guarda la app al preparar): el enlace es el del elemento CAPTURADO (n=999).
+const SNAP = '<a href="detail.html?n=999"><img data-omni-main="1" src="x"></a><h3>t</h3><div class="src">f</div>';
+const backBlue = (page: Page) => page.evaluate(() => (document.querySelector<HTMLImageElement>('#back')?.getAttribute('src') ?? '').includes('blue'));
+
+test('ficha apilada (marcador grande detrás y la imagen real llega tarde encima): se sustituyen las dos', async ({ page }) => {
+  await open(page, '?panel=1&stack=1');
+  const p = await showCard(page, 5);
+  await page.waitForTimeout(600);
+  await page.mouse.click(p.x, p.y);
+  await expect(page.locator('#panel')).toBeVisible();
+  await expect.poll(() => heroBlue(page), { timeout: 4000 }).toBe(true); // la imagen real, la que se VE
+  expect(await backBlue(page)).toBe(true);
+});
+
+test('la tarjeta sustituida con instantánea sigue abriendo la ficha de la web, y esa ficha sale forzada otra vez', async ({ page }) => {
+  await open(page, '?panel=1', { html: SNAP, texts: undefined });
+  const p = await showCard(page, 5);
+  await page.waitForTimeout(600);
+  await page.mouse.click(p.x, p.y);
+  await expect.poll(() => heroBlue(page)).toBe(true);
+  await page.click('#close');
+  await expect(page.locator('#panel')).toHaveCount(0);
+  await expect.poll(() => forcedCard(page)).toBe('5');
+  // lo que se ve es lo forzado…
+  expect(await page.evaluate(() => document.querySelector('.card[data-n="5"] [data-omni-overlay] h3, .card[data-n="5"] h3')?.textContent)).toBeTruthy();
+  // …y al tocarla la web abre SU ficha (el enlace original no se ha perdido)
+  await page.evaluate(() => ((window as any).__linkClicked = null));
+  const q = await showCard(page, 5);
+  await page.waitForTimeout(600);
+  await page.mouse.click(q.x, q.y);
+  await expect(page.locator('#panel')).toBeVisible();
+  expect(await page.evaluate(() => (window as any).__linkClicked)).toBe('detail.html?n=5');
+  await expect.poll(() => heroBlue(page)).toBe(true); // coherente con lo que se ve en la lista
+});
+
+test('panel reutilizado: al cerrar la ficha se suelta y otra ficha distinta ya no se fuerza', async ({ page }) => {
+  await open(page, '?panel=1&reuse=1');
+  const p = await showCard(page, 5);
+  await page.waitForTimeout(600);
+  await page.mouse.click(p.x, p.y);
+  await expect.poll(() => heroBlue(page)).toBe(true);
+  await page.click('#close');
+  await page.waitForTimeout(1500);
+  const q = await showCard(page, 7);
+  await page.waitForTimeout(600);
+  await page.mouse.click(q.x, q.y);
+  await expect(page.locator('#panel')).toBeVisible();
+  await page.waitForTimeout(1200);
+  expect(await heroBlue(page)).toBe(false);
+});
+
+test('tarjetas muy anidadas (Amazon: la imagen está ~14 niveles por debajo de la tarjeta de la lista) también se reconocen', async ({ page }) => {
+  await open(page, '?panel=1&deep=1', { detail: undefined });
+  const p = await showCard(page, 5);
+  await page.waitForTimeout(600);
+  await page.mouse.click(p.x, p.y);
+  expect(await forcedCard(page)).toBe('5');
+});
+
+test('un logo suelto entre bloques de la página no cuenta como lista aunque haya varios bloques con imágenes', async ({ page }) => {
+  await open(page, '?panel=1');
+  await page.evaluate(() => {
+    document.body.insertAdjacentHTML(
+      'afterbegin',
+      '<header style="height:300px"><div class="blk" style="height:300px"><img id="hdr" alt="x" style="width:120px;height:120px" src="data:image/svg+xml;utf8,<svg xmlns=%27http://www.w3.org/2000/svg%27 width=%2710%27 height=%2710%27/>"></div></header>' +
+        '<section style="height:900px"><div class="blk" style="height:900px"><img alt="y" style="width:100px;height:100px" src="data:image/svg+xml;utf8,<svg xmlns=%27http://www.w3.org/2000/svg%27 width=%2710%27 height=%2710%27/>"></div></section>',
+    );
+    window.scrollTo(0, 0);
+  });
+  await page.waitForTimeout(600);
+  const r = await page.evaluate(() => document.querySelector('#hdr')!.getBoundingClientRect().toJSON());
+  await page.mouse.click(r.x + r.width / 2, r.y + r.height / 2);
+  expect(await forcedCard(page)).toBeNull();
 });

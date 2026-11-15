@@ -84,7 +84,10 @@ final class OmniWebView: WKWebView, WKNavigationDelegate, WKScriptMessageHandler
         controller.removeAllUserScripts()
         controller.addUserScript(WKUserScript(source: bridgeShim + engineJS, injectionTime: .atDocumentStart, forMainFrameOnly: true))
         if !js.isEmpty {
-            controller.addUserScript(WKUserScript(source: js, injectionTime: .atDocumentEnd, forMainFrameOnly: true))
+            // La configuración del efecto se inyecta al EMPEZAR el documento: la ficha puede ser OTRA página (Amazon) que tarda en
+            // terminar de cargar y el motor tiene que estar listo antes. La captura se arma al terminar de montarse el DOM.
+            let when: WKUserScriptInjectionTime = js.hasPrefix("OmniWeb.configure") ? .atDocumentStart : .atDocumentEnd
+            controller.addUserScript(WKUserScript(source: js, injectionTime: when, forMainFrameOnly: true))
         }
     }
 
@@ -272,6 +275,14 @@ final class OmniWebHost: NSObject, WebViewHost {
     func loadUrl(view: UIView, url: String) {
         guard let web = view as? OmniWebView, let target = URL(string: url) else { return }
         web.load(URLRequest(url: target))
+    }
+
+    func goBack(view: UIView) {
+        if let web = view as? OmniWebView, web.canGoBack { web.goBack() }
+    }
+
+    func goForward(view: UIView) {
+        if let web = view as? OmniWebView, web.canGoForward { web.goForward() }
     }
 
     func setStartScript(view: UIView, js: String) {

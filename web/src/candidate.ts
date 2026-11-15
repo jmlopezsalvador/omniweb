@@ -77,20 +77,35 @@ function hasMedia(e: Element): boolean {
   return !!mediaKind(e) || !!e.querySelector('img,video,[style*="background-image"]');
 }
 
+/** Profundidad máxima desde el medio hasta la tarjeta de la lista (Amazon la anida ~14 niveles por encima de la imagen). */
+const MAX_LIST_DEPTH = 24;
+
+/** Tamaño «de la misma tarjeta»: ancho y alto parecidos (una cabecera, un banner o el pie no se parecen a las filas de una lista). */
+function sizeLike(a: Element, b: Element): boolean {
+  const ra = a.getBoundingClientRect();
+  const rb = b.getBoundingClientRect();
+  if (ra.height === 0 || rb.height === 0 || ra.width === 0 || rb.width === 0) return true; // sin layout (jsdom) o aún sin pintar
+  const w = ra.width / rb.width;
+  const h = ra.height / rb.height;
+  return w > 0.5 && w < 2 && h > 0.25 && h < 4;
+}
+
 /**
  * ¿La tarjeta candidata forma parte de un LISTADO? Sube desde el medio hasta encontrar un ancestro que tenga al menos 2
- * hermanos de su misma familia con medios. Así se ignoran logos, cabeceras y banners (el logo de Google antes de buscar)
- * y solo se fuerza un resultado de verdad. Con layout, además, el medio debe tener un tamaño mínimo.
+ * hermanos de su misma familia, con medios y de un tamaño parecido. Así se ignoran logos, cabeceras y banners (el logo de
+ * Google antes de buscar) y solo se fuerza un resultado de verdad. Con layout, además, el medio debe tener un tamaño mínimo.
+ * El límite de subida es alto (`MAX_LIST_DEPTH`): en Amazon la tarjeta del resultado está ~14 niveles por encima de su imagen;
+ * como a esa altura hay muchos bloques de página, el parecido de tamaño es lo que evita falsos positivos.
  */
 export function isListItem(c: Candidate): boolean {
   const mr = c.media.getBoundingClientRect();
   if (mr.height > 0 && (mr.width < 60 || mr.height < 60)) return false;
   const body = c.media.ownerDocument.body;
   let el: Element | null = c.media;
-  for (let depth = 0; el && depth < 12; depth++, el = el.parentElement) {
+  for (let depth = 0; el && depth < MAX_LIST_DEPTH; depth++, el = el.parentElement) {
     const parent: Element | null = el.parentElement;
     if (!parent || parent === body) break;
-    const sibs = Array.from(parent.children).filter((s) => s !== el && similar(s, el!) && hasMedia(s));
+    const sibs = Array.from(parent.children).filter((s) => s !== el && similar(s, el!) && hasMedia(s) && sizeLike(s, el!));
     if (sibs.length >= 2) return true;
   }
   return false;

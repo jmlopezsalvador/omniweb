@@ -56,7 +56,7 @@ private val ChromeText = Color(0xFFE8EAED)
 
 /** Barra superior. Ocupa también la zona de la barra de estado (hora, batería) con su mismo color. */
 @Composable
-fun BrowserTopBar(ios: Boolean, url: String, onMenu: () -> Unit, onBack: (() -> Unit)? = null) {
+fun BrowserTopBar(ios: Boolean, url: String, onMenu: () -> Unit, onBack: (() -> Unit)? = null, hint: String? = null) {
     val bar = if (ios) IosBar else ChromeBar
     Box(Modifier.fillMaxWidth().background(bar).statusBarsPadding()) {
         if (ios) {
@@ -73,8 +73,8 @@ fun BrowserTopBar(ios: Boolean, url: String, onMenu: () -> Unit, onBack: (() -> 
                     contentAlignment = Alignment.Center,
                 ) {
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        LockIcon(IosText.copy(alpha = 0.7f), 12.dp)
-                        Text(displayHost(url), color = IosText, fontSize = 15.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        if (hint == null) LockIcon(IosText.copy(alpha = 0.7f), 12.dp)
+                        Text(hint ?: displayHost(url), color = if (hint == null) IosText else IosText.copy(alpha = 0.55f), fontSize = 15.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     }
                 }
             }
@@ -92,8 +92,8 @@ fun BrowserTopBar(ios: Boolean, url: String, onMenu: () -> Unit, onBack: (() -> 
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(10.dp),
                 ) {
-                    LockIcon(ChromeText.copy(alpha = 0.8f), 14.dp)
-                    Text(displayHost(url), color = ChromeText, fontSize = 15.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    if (hint == null) LockIcon(ChromeText.copy(alpha = 0.8f), 14.dp)
+                    Text(hint ?: displayHost(url), color = if (hint == null) ChromeText else ChromeText.copy(alpha = 0.6f), fontSize = 15.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
                 Spacer(Modifier.width(10.dp))
                 TabsBadge(ChromeText)
@@ -106,12 +106,14 @@ fun BrowserTopBar(ios: Boolean, url: String, onMenu: () -> Unit, onBack: (() -> 
 
 /** Barra inferior de Safari (solo iOS). `visible=false` la esconde con la altura a 0 (al bajar). */
 @Composable
-fun BrowserBottomBar(visible: Boolean, onBack: (() -> Unit)? = null) {
+fun BrowserBottomBar(visible: Boolean, onBack: (() -> Unit)? = null, onForward: (() -> Unit)? = null) {
     Box(Modifier.fillMaxWidth().background(IosBar).navigationBarsPadding()) {
         if (visible) {
             Row(Modifier.fillMaxWidth().height(46.dp), horizontalArrangement = Arrangement.SpaceEvenly, verticalAlignment = Alignment.CenterVertically) {
                 Box(Modifier.clickable(enabled = onBack != null) { onBack?.invoke() }) { Chevron(left = true, color = IosIcon) }
-                Chevron(left = false, color = IosIcon.copy(alpha = 0.35f))
+                Box(Modifier.clickable(enabled = onForward != null) { onForward?.invoke() }) {
+                    Chevron(left = false, color = if (onForward != null) IosIcon else IosIcon.copy(alpha = 0.35f))
+                }
                 ShareIcon(IosIcon)
                 BookIcon(IosIcon)
                 TabsIcon(IosIcon)

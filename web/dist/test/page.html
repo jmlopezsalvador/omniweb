@@ -43,6 +43,8 @@
       c.innerHTML = '<a href="detail.html?n=' + i + '"><div class="bg" style="background-image:url(\'' + ph(i) + '\')"></div></a>';
     }
     c.insertAdjacentHTML('beforeend', '<h3>Título original ' + i + '</h3><div class="src">Fuente ' + i + '</div>');
+    // &deep=1 → como Amazon: la tarjeta lleva la imagen ~14 niveles por debajo de la tarjeta de la lista
+    if (params.get('deep') === '1') c.innerHTML = '<div>'.repeat(14) + c.innerHTML + '</div>'.repeat(14);
     return c;
   }
   function more() { for (var k = 0; k < 10; k++) feed.appendChild(card(++n)); }
@@ -59,6 +61,8 @@
   //   &overlay=1 → una capa transparente de la propia web tapa la imagen de la ficha (enlace/botón superpuesto).
   var reuse = params.get('reuse') === '1';
   var overlay = params.get('overlay') === '1';
+  //   &stack=1   → como Google: la ficha apila un marcador grande DETRÁS y la imagen real llega más tarde y lo tapa.
+  var stack = params.get('stack') === '1';
   function buildPanel(n) {
     var p = document.createElement('div');
     p.id = 'panel';
@@ -70,6 +74,18 @@
       '<div style="display:flex;gap:6px;margin:12px"><img class="rel" alt="r1" width="60" height="60" src="' + ph(200) + '"><img class="rel" alt="r2" width="60" height="60" src="' + ph(201) + '"></div>' +
       '<button id="close" style="margin:12px;padding:10px 20px">Cerrar</button>';
     document.body.appendChild(p);
+    if (stack) {
+      var ph0 = p.querySelector('#hero');
+      ph0.id = 'back';
+      ph0.style.cssText = 'position:absolute;left:0;top:0;width:100%;height:380px;object-fit:cover';
+      setTimeout(function () {
+        var h = document.createElement('img');
+        h.id = 'hero'; h.alt = 'ficha';
+        h.style.cssText = 'position:absolute;left:0;top:40px;width:100%;height:300px;object-fit:cover';
+        h.src = ph(100 + n);
+        p.insertBefore(h, ph0.nextSibling);
+      }, 500);
+    }
     p.querySelector('#close').addEventListener('click', function () { if (reuse) p.style.display = 'none'; else p.remove(); });
     return p;
   }
