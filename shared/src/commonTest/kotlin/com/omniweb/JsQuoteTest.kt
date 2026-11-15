@@ -2,6 +2,7 @@ package com.omniweb
 
 import com.omniweb.ui.DetailItem
 import com.omniweb.ui.ForceConfig
+import com.omniweb.ui.HomeShortcut
 import com.omniweb.ui.jsQuote
 import com.omniweb.ui.toJs
 import kotlin.test.Test
@@ -43,6 +44,12 @@ class JsQuoteTest {
         assertTrue(js.contains("session:3,"))
         assertFalse(ForceConfig("u").toJs().contains("detail"))
         assertFalse(ForceConfig("u", detail = DetailItem("d", emptyList(), null)).toJs().contains("html"))
+    }
+
+    @Test fun shortcutsAreIncludedOnlyWhenPresent() {
+        val js = ForceConfig("", shortcuts = listOf(HomeShortcut("a", "Am\"azon", "data:i"), HomeShortcut("y", "YouTube", null))).toJs()
+        assertTrue(js.contains("shortcuts:[{id:\"a\",name:\"Am\\\"azon\",icon:\"data:i\"},{id:\"y\",name:\"YouTube\"}],"))
+        assertFalse(ForceConfig("u").toJs().contains("shortcuts"))
     }
 
     @Test fun reportScrollIsOptIn() {

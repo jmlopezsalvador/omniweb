@@ -2,6 +2,7 @@ import { applyImage, applySnapshot, applySnapshotAt, applyTexts, applyTitleNear,
 import { createCaptureMode } from './capture';
 import { findCandidate, isListItem, type Candidate } from './candidate';
 import { allMedia, cardKey, findCardByKey, findFichaMedia } from './ficha';
+import { createShortcuts, type Shortcut } from './home';
 import { createIdleDetector } from './idle';
 import { createTapTrigger } from './tap';
 
@@ -34,6 +35,8 @@ export interface OmniConfig {
   detail?: OmniDetail;
   /** Modo 'tap': ¿empieza armado? Si no, hay que llamar a `OmniWeb.setArmed(true)` (activación secreta). */
   armed?: boolean;
+  /** «Inicio Google»: si hay, la página no se fuerza; se muestra bajo el buscador la fila de sitios de la app. */
+  shortcuts?: Shortcut[];
   /** Identifica una sesión del efecto: al cambiar (p. ej. «Reiniciar») se olvida lo ya forzado. */
   session?: number;
 }
@@ -106,6 +109,7 @@ function install(win: Window & typeof globalThis) {
   const listContent = (): Content => ({ imageUrl: cfg!.imageUrl, texts: cfg!.texts, html: cfg!.html, title: cfg!.title });
   const fichaContent = (): Content => ({ imageUrl: cfg!.detail!.imageUrl, texts: cfg!.detail!.texts, html: cfg!.detail!.html });
 
+  const shortcutRow = createShortcuts(win);
   const idle = createIdleDetector(win, { idleMs: 450, onIdle: () => (cfg?.mode === 'auto' || cfg?.mode === undefined) && trigger() });
 
   // Disparo por toque (modo 'tap')
@@ -369,6 +373,10 @@ function install(win: Window & typeof globalThis) {
       capture.stop();
     },
     configure(c: OmniConfig) {
+      if (c.shortcuts) {
+        shortcutRow.show(c.shortcuts);
+        return;
+      }
       cfg = { mode: 'auto', idleMs: 450, ...c, imageUrl: normalizeImageUrl(c.imageUrl) };
       if (cfg.detail) cfg.detail = { ...cfg.detail, imageUrl: normalizeImageUrl(cfg.detail.imageUrl) };
       idle.setIdleMs(cfg.idleMs!);
@@ -416,6 +424,7 @@ function install(win: Window & typeof globalThis) {
     reset,
     disarm() {
       cfg = null;
+      shortcutRow.stop();
       win.clearInterval(fichaTimer);
       win.clearInterval(restoreTimer);
       idle.disarm();

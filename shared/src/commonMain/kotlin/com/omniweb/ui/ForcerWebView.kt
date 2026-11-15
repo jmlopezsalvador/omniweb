@@ -20,7 +20,12 @@ data class ForceConfig(
     val detail: DetailItem? = null,
     /** Sesión del efecto: al cambiar («Reiniciar») el motor olvida lo ya forzado, aunque la página no se recargue por completo. */
     val session: Int = 0,
+    /** «Inicio Google»: si no está vacío, el motor no fuerza nada y muestra bajo el buscador de Google esta fila de sitios. */
+    val shortcuts: List<HomeShortcut> = emptyList(),
 )
+
+/** Un sitio de la fila del «Inicio Google». `icon` = data: URL del icono (null: se pinta la inicial). */
+data class HomeShortcut(val id: String, val name: String, val icon: String?)
 
 /**
  * Navegador in-app con el motor de forzaje inyectado (bundle `web/dist/omniweb.js`).
@@ -93,5 +98,8 @@ internal fun ForceConfig.toJs(): String =
         (if (detail != null) {
             "detail:{imageUrl:${jsQuote(detail.imageData)},texts:[${detail.texts.joinToString(",") { jsQuote(it) }}]" +
                 (if (detail.html != null) ",html:${jsQuote(detail.html)}" else "") + "},"
+        } else "") +
+        (if (shortcuts.isNotEmpty()) {
+            "shortcuts:[${shortcuts.joinToString(",") { "{id:${jsQuote(it.id)},name:${jsQuote(it.name)}" + (if (it.icon != null) ",icon:${jsQuote(it.icon)}" else "") + "}" }}],"
         } else "") +
         "session:$session,idleMs:$idleMs,mode:'tap',armed:$auto}"

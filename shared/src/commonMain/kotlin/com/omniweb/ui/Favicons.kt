@@ -34,22 +34,28 @@ internal fun dataUrlBytes(dataUrl: String): ByteArray? =
 
 private const val NO_ICON = "none"
 
+/** data: URL del icono del sitio (descargándolo y cacheándolo en `blobs` la primera vez); null si no tiene. */
+suspend fun faviconData(site: Site, blobs: BlobStore): String? {
+    val key = "fav.${site.id}"
+    var data = blobs.read(key)
+    if (data == null) {
+        for (origin in faviconOrigins(site.startUrl)) {
+            data = fetchImageDataUrl("$origin/apple-touch-icon.png", "") ?: fetchImageDataUrl("$origin/favicon.ico", "")
+            if (data != null && dataUrlBytes(data)?.let { decodeImageBitmap(it) } != null) break
+            data = null
+        }
+        blobs.write(key, data ?: NO_ICON) // «none» evita reintentar en cada apertura
+    }
+    return data?.takeIf { it != NO_ICON }
+}
+
 /** Icono del sitio (null mientras carga o si no tiene). Se descarga una vez y se cachea en `blobs` (`fav.<id>`). */
 @Composable
 fun rememberFavicon(site: Site, blobs: BlobStore): ImageBitmap? {
     var bitmap by remember(site.id, site.startUrl) { mutableStateOf<ImageBitmap?>(null) }
     LaunchedEffect(site.id, site.startUrl) {
-        val key = "fav.${site.id}"
-        var data = blobs.read(key)
-        if (data == null) {
-            for (origin in faviconOrigins(site.startUrl)) {
-                data = fetchImageDataUrl("$origin/apple-touch-icon.png", "") ?: fetchImageDataUrl("$origin/favicon.ico", "")
-                if (data != null && dataUrlBytes(data)?.let { decodeImageBitmap(it) } != null) break
-                data = null
-            }
-            blobs.write(key, data ?: NO_ICON) // «none» evita reintentar en cada apertura
-        }
-        if (data != null && data != NO_ICON) bitmap = dataUrlBytes(data)?.let { decodeImageBitmap(it) }
+        val data = faviconData(site, blobs)
+        if (data != null) bitmap = dataUrlBytes(data)?.let { decodeImageBitmap(it) }
     }
     return bitmap
 }

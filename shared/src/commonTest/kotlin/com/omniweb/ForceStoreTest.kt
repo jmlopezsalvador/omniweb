@@ -7,6 +7,8 @@ import com.omniweb.ui.DetailItem
 import com.omniweb.ui.ForceStore
 import com.omniweb.ui.ForcedItem
 import com.omniweb.ui.GOOGLE_IMAGES
+import com.omniweb.ui.HOME_GOOGLE
+import com.omniweb.ui.HOME_GRID
 import com.omniweb.ui.KeyValueStore
 import com.omniweb.ui.SiteSettings
 import com.omniweb.ui.isExternalScheme
@@ -106,6 +108,15 @@ class ForceStoreTest {
         assertTrue(store(prefs).haptics())
         store(prefs).setHaptics(false)
         assertFalse(store(prefs).haptics())
+    }
+
+    @Test fun homeStyleDefaultsToGridAndPersists() {
+        val prefs = MemoryStore()
+        assertEquals(HOME_GRID, store(prefs).homeStyle())
+        store(prefs).setHomeStyle(HOME_GOOGLE)
+        assertEquals(HOME_GOOGLE, store(prefs).homeStyle())
+        store(prefs).setHomeStyle("raro")
+        assertEquals(HOME_GRID, store(prefs).homeStyle())
     }
 
     @Test fun practiceModeFlag() {

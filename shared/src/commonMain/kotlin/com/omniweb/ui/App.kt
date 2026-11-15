@@ -73,6 +73,7 @@ fun OmniWebRoot(prefs: KeyValueStore, blobs: BlobStore) {
     var screen by remember { mutableStateOf<Screen>(Screen.Home) }
     var message by remember { mutableStateOf<String?>(null) }
     var version by remember { mutableStateOf(0) } // fuerza releer el almacén tras guardar
+    var homeTab by remember { mutableStateOf(HomeTab.Favorites) } // pestaña del inicio; sobrevive a Preparar/Efecto
 
     // En el efecto: sin barras del sistema y pantalla encendida
     SystemBarsEffect(immersive = screen is Screen.EffectOf)
@@ -90,6 +91,8 @@ fun OmniWebRoot(prefs: KeyValueStore, blobs: BlobStore) {
                     blobs = blobs,
                     version = version,
                     message = message,
+                    tab = homeTab,
+                    onTab = { homeTab = it },
                     onPrepare = { message = null; screen = Screen.CaptureOf(it) },
                     onEffect = { site ->
                         val item = store.load(site.id)
@@ -111,6 +114,7 @@ fun OmniWebRoot(prefs: KeyValueStore, blobs: BlobStore) {
                     onDone = { saved ->
                         message = if (saved) "Forzaje guardado en ${s.site.name}." else null
                         version++
+                        homeTab = HomeTab.Sites // tras preparar se vuelve a la zona del mago
                         screen = Screen.Home
                     },
                 )

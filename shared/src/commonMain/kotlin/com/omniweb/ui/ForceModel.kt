@@ -154,6 +154,10 @@ class ForceStore(private val prefs: KeyValueStore, private val blobs: BlobStore)
     fun setHaptics(on: Boolean) = prefs.putBoolean("haptics", on)
 
     /** Modo práctica: al salir del efecto se borran historial, cookies y caché. */
+    /** Aspecto de la pestaña Favoritos: [HOME_GRID] (cuadrícula de iconos) o [HOME_GOOGLE] (web de Google con la fila de sitios). */
+    fun homeStyle(): String = prefs.getString("homeStyle")?.takeIf { it == HOME_GOOGLE } ?: HOME_GRID
+    fun setHomeStyle(style: String) = prefs.putString("homeStyle", if (style == HOME_GOOGLE) HOME_GOOGLE else HOME_GRID)
+
     fun practiceMode(): Boolean = prefs.getBoolean("practice", false)
     fun setPracticeMode(on: Boolean) = prefs.putBoolean("practice", on)
 
@@ -232,3 +236,6 @@ class ForceStore(private val prefs: KeyValueStore, private val blobs: BlobStore)
         prefs.putString("f.$siteId.html", "")
     }
 }
+
+const val HOME_GRID = "grid"
+const val HOME_GOOGLE = "google"
