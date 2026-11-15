@@ -3,6 +3,7 @@ package com.omniweb
 import android.os.Bundle
 import android.view.KeyEvent
 import androidx.activity.ComponentActivity
+import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import com.omniweb.ui.AndroidApp
@@ -13,7 +14,11 @@ import com.omniweb.ui.VolumeKeyBus
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
-        enableEdgeToEdge()
+        // Fondo siempre oscuro: iconos claros en las barras del sistema
+        enableEdgeToEdge(
+            statusBarStyle = SystemBarStyle.dark(android.graphics.Color.TRANSPARENT),
+            navigationBarStyle = SystemBarStyle.dark(android.graphics.Color.TRANSPARENT),
+        )
         super.onCreate(savedInstanceState)
         AndroidApp.context = applicationContext
         val prefs = SharedPrefsStore(applicationContext)

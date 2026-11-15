@@ -50,7 +50,8 @@ Navegador con WebView real: el mago configura web objetivo + una imagen (y títu
 - SDK de Android en `C:\Users\jmlop\AppData\Local\Android\Sdk`: crear `local.properties` con `sdk.dir=...` (ignorado por git).
 - `./gradlew.bat :shared:testDebugUnitTest assembleDebug` → APK en `app/build/outputs/apk/debug/app-debug.apk`.
   Copiar el APK a `data/android_build/` si se quiere conservar.
-- Emulador AVD `calcu` (Android 15), reutilizable. Poner la zona horaria `Europe/Madrid` (arranca en GMT). Gboard puede salir en negro (es del emulador).
+- Emulador: usar el AVD **`omniweb`** (Android 15, 3 GB RAM, GPU host; arranca en ~40 s): `emulator -avd omniweb -no-snapshot-load -no-audio`. El antiguo `calcu` (1,5 GB RAM, 6 GB de estado) se queda «offline» minutos o para siempre: no usarlo.
+- (obsoleto) Emulador AVD `calcu` (Android 15), reutilizable. Poner la zona horaria `Europe/Madrid` (arranca en GMT). Gboard puede salir en negro (es del emulador).
 - `gh` en Windows: `C:\Program Files\GitHub CLI\gh.exe` (hace falta `gh auth login` una vez).
 - En Windows los destinos de iOS se ignoran (`kotlin.native.ignoreDisabledTargets=true`); Android compila y testea igual.
 
@@ -132,7 +133,21 @@ Si la app lleva una página de «Instrucciones» de cara al usuario final, mante
 - **Arquitectura**: el `WKWebView` y lo del sistema viven en **Swift** (`iosApp/iosApp/OmniWebHost.swift`), que implementa el protocolo `WebViewHost` declarado en Kotlin (`shared/src/iosMain/.../IosWebHost.kt`); Compose lo embebe con `UIKitView` (`ForcerWebView.ios.kt`). Se hizo así porque no hay Mac para compilar y los enums/protocolos de WebKit son más seguros en Swift que vía cinterop. Cambiar una firma del protocolo obliga a cambiar el Swift (las etiquetas salen de los nombres de los parámetros).
 - Entrada: `MainViewControllerKt.MainViewController(host: OmniWebHost())` (ContentView.swift). `iosWebHost` global guarda el host.
 - El motor `web/dist/omniweb.js` se empaqueta como recurso (project.yml `buildPhase: resources`) y se inyecta con `WKUserScript` al empezar cada documento; el script de arranque (`OmniWeb.configure(...)` / `startCapture()`) al terminar el DOM. El puente `window.OmniBridge.onCapture(json)` se simula con un shim sobre `webkit.messageHandlers`. `jsQuote`/`ForceConfig.toJs()` son comunes (con tests).
-- **Compose queda POR DEBAJO del `UIKitView`**: no se puede superponer Compose al navegador. Por eso las esquinas ocultas del efecto son vistas nativas dentro del `OmniWebView` (`onHiddenTap` / `onHiddenLongPress`) y el botón «Inicio» de Preparar es visible (no hay tecla atrás; «atrás» en la web = gesto de borde). Los diálogos Compose sí salen por encima.
+- **ACTUALIZACIÓN (primera prueba en iPhone)**: embebido con `UIKitView` el scroll NO llegaba al `WKWebView` en ninguna web. Ahora el navegador es una **capa nativa SwiftUI** (`WebOverlay` en `ContentView.swift`, ZStack sobre la vista de Compose): `ForcerWebView.ios.kt` solo reserva un `Box` y avisa de su rectángulo (`layoutWebView`, px→puntos con `LocalDensity`); `WebOverlayContainer` deja pasar los toques que no son del navegador y lleva las esquinas ocultas POR ENCIMA del navegador (dentro del WKWebView, WebKit podía taparlas en modo escritorio). Un diálogo de Compose queda por debajo de la capa: por eso `covered = true` oculta el navegador mientras haya diálogo (Preparar al guardar, menú oculto del efecto).
+- (histórico) **Compose queda POR DEBAJO del `UIKitView`**: no se puede superponer Compose al navegador. Por eso las esquinas ocultas del efecto son vistas nativas dentro del `OmniWebView` (`onHiddenTap` / `onHiddenLongPress`) y el botón «Inicio» de Preparar es visible (no hay tecla atrás; «atrás» en la web = gesto de borde). Los diálogos Compose sí salen por encima.
 - Volumen: `AVAudioSession.outputVolume` (KVO); no hay evento con el volumen al máximo/mínimo. Datos: `WKWebsiteDataStore` + `URLCache` + cookies. Blobs: Application Support/blobs.
 - No se bloquean enlaces universales (WKWebView no los abre en otra app al navegar dentro); sí los esquemas no web (`decidePolicyFor`).
 - Instalar: Sideloadly/AltStore con el `.ipa` de `gh run download`. Lanzar el workflow solo con permiso del usuario.
+
+## Rendimiento y comprobaciones (emulador)
+- Arranque en frío de la build debug en el emulador: ~1,5 s y ~55 fotogramas saltados en el primer fotograma, con o sin datos (coste base de Compose/JIT; en release baja). Medir con `adb shell am start -W` y `logcat | grep "Skipped"`.
+- La pantalla de inicio NO debe leer imágenes: usa `ForceStore.summary` (solo preferencias). `load` (imagen + HTML, MB) solo al entrar al efecto.
+- WebView: el motor se inyecta en `onPageStarted` (idempotente) y la configuración, que puede llevar MB, solo en `onPageFinished`.
+- Si Google «se ve pequeño»: mirar «· escritorio» en la tarjeta del sitio (Ajustes → Web de escritorio). En escritorio el viewport es 980 px al ~42 %; en móvil 412 px. Dejar los ajustes de prueba como estaban al terminar.
+- Sembrar forzajes pesados para pruebas de rendimiento: ver el script `seed.py` de la sesión (blobs en `files/blobs` + `shared_prefs/omniweb.xml` vía `run-as`).
+
+## Diseño (tema)
+- `Theme.kt`: `OmniTheme` oscuro propio (paleta violeta/turquesa, tipografías y formas). El tema por defecto era claro sobre fondo negro: texto negro sobre negro en campos y títulos. El contenedor raíz es un `Surface` (fija también el color del texto) y `MainActivity` usa `SystemBarStyle.dark` (iconos claros en la barra de estado).
+- Inicio: tarjetas por sitio (avatar con inicial, estado «Preparado · «título»», pastillas Automático/Móvil/450 ms, botones Preparar/Efecto y menú ⋮ dibujado con Canvas). Colores explícitos para campos de texto: no usar `Color.Black` de fondo ni `Text` sin tema.
+- El efecto abre `Site.startUrl` (inicio del sitio, sin búsqueda); Amazon pasó de `/s?k=auriculares` a `https://www.amazon.es`. `ForcedItem.pageUrl` ya no se usa para abrir.
+- Android: la primera vez que se entra en inmersivo el sistema muestra «Viewing full screen / Got it» y se traga el primer gesto.

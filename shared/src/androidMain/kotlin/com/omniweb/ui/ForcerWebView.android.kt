@@ -51,6 +51,7 @@ actual fun ForcerWebView(
     triggerNonce: Int,
     onHiddenTap: (() -> Unit)?,
     onHiddenLongPress: (() -> Unit)?,
+    covered: Boolean,
 ) {
     val latestCapture by rememberUpdatedState(onCapture)
     val latestArmed by rememberUpdatedState(armed)
@@ -101,19 +102,21 @@ actual fun ForcerWebView(
                     // Esquemas que abrirían otra app (intent://, market://, youtube://…): se ignoran
                     override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean =
                         isExternalScheme(request.url.toString())
-                    // Inyectar lo antes posible; se repite en onPageFinished por si la página tardó en montar el DOM.
-                    override fun onPageStarted(view: WebView, u: String?, favicon: Bitmap?) = inject(view)
-                    override fun onPageFinished(view: WebView, u: String?) = inject(view)
-                    override fun doUpdateVisitedHistory(view: WebView, u: String?, isReload: Boolean) {
-                        canGoBack = view.canGoBack()
+                    // El motor (~20 KB, idempotente) entra al empezar la página; la configuración, que puede llevar
+                    // MB de imagen, solo al terminar (antes se evaluaba dos veces por página).
+                    override fun onPageStarted(view: WebView, u: String?, favicon: Bitmap?) {
+                        if (captureMode || config != null) view.evaluateJavascript("if(!window.OmniWeb){$bundle}", null)
                     }
-                    private fun inject(view: WebView) {
+                    override fun onPageFinished(view: WebView, u: String?) {
                         val start = when {
                             captureMode -> if (latestArmed) "OmniWeb.startCapture();" else ""
                             config != null -> "OmniWeb.configure(${config.toJs()});"
                             else -> ""
                         }
-                        view.evaluateJavascript("$bundle;$start", null)
+                        if (start.isNotEmpty()) view.evaluateJavascript("if(!window.OmniWeb){$bundle}$start", null)
+                    }
+                    override fun doUpdateVisitedHistory(view: WebView, u: String?, isReload: Boolean) {
+                        canGoBack = view.canGoBack()
                     }
                 }
                 loadUrl(url)

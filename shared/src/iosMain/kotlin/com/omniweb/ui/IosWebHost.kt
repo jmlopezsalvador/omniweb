@@ -16,7 +16,7 @@ interface WebViewCallbacks {
     /** El motor JS entregó el elemento tocado en modo captura. */
     fun onCapture(imageUrl: String, imageData: String?, texts: List<String>, html: String?, pageUrl: String, aspect: Double)
 
-    /** Esquina inferior derecha del efecto (disparo manual). Compose queda por debajo del WKWebView: lo gestiona Swift. */
+    /** Esquina inferior derecha del efecto (disparo manual). Compose queda por debajo del navegador: lo gestiona Swift. */
     fun onHiddenTap()
 
     /** Pulsación larga en la esquina superior izquierda del efecto (menú oculto). */
@@ -36,6 +36,16 @@ interface VoidCallback {
 interface WebViewHost {
     /** Crea el navegador. `effectGestures`: añade las esquinas ocultas nativas (solo en el efecto). */
     fun createWebView(desktop: Boolean, effectGestures: Boolean, callbacks: WebViewCallbacks): UIView
+
+    /**
+     * El navegador es una capa NATIVA (SwiftUI) por encima de Compose, no un `UIKitView`: así los toques y el scroll van
+     * directos al WKWebView sin pasar por Compose. Compose reserva el hueco y avisa de su rectángulo (en puntos, respecto a
+     * la pantalla). `hidden`: un diálogo de Compose debe quedar visible por encima.
+     */
+    fun layoutWebView(view: UIView, x: Double, y: Double, width: Double, height: Double, hidden: Boolean)
+
+    /** Quita el navegador de la pantalla. */
+    fun destroyWebView(view: UIView)
 
     fun loadUrl(view: UIView, url: String)
 

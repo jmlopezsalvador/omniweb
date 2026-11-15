@@ -3,6 +3,7 @@ package com.omniweb.ui
 import androidx.compose.foundation.layout.Box
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -11,17 +12,21 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.viewinterop.UIKitView
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.layout.boundsInRoot
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.platform.LocalDensity
 import kotlin.coroutines.resume
 import kotlinx.coroutines.suspendCancellableCoroutine
 import platform.UIKit.UIView
 
 /**
- * iOS: `WKWebView` creado por Swift (`OmniWebHost`) y embebido con `UIKitView`.
+ * iOS: el `WKWebView` lo crea Swift (`OmniWebHost`) y vive en una capa nativa por encima de Compose. Esta función solo
+ * reserva el hueco (un `Box`) y le dice a Swift dónde está. Antes se embebía con `UIKitView` y el scroll no llegaba al
+ * WKWebView en ninguna web: con la capa nativa el toque no pasa por Compose.
  * - El motor JS se inyecta al empezar cada documento y `startScript` (configurar / armar captura) al terminar.
- * - No hay tecla atrás: en iOS se usa el gesto de borde del propio WKWebView; `onExit` no se usa aquí.
- * - Compose queda POR DEBAJO del navegador: los gestos ocultos del efecto los dan las esquinas nativas de Swift
- *   (`onHiddenTap` / `onHiddenLongPress`).
+ * - No hay tecla atrás: gesto de borde del WKWebView; `onExit` no se usa.
+ * - Las esquinas ocultas del efecto son vistas nativas (`onHiddenTap` / `onHiddenLongPress`).
  */
 @Composable
 actual fun ForcerWebView(
@@ -37,6 +42,7 @@ actual fun ForcerWebView(
     triggerNonce: Int,
     onHiddenTap: (() -> Unit)?,
     onHiddenLongPress: (() -> Unit)?,
+    covered: Boolean,
 ) {
     val host = iosWebHost
     if (host == null) {
@@ -48,7 +54,9 @@ actual fun ForcerWebView(
     val latestArmed by rememberUpdatedState(armed)
     val latestTap by rememberUpdatedState(onHiddenTap)
     val latestLong by rememberUpdatedState(onHiddenLongPress)
+    val density = LocalDensity.current.density
     var view by remember { mutableStateOf<UIView?>(null) }
+    var bounds by remember { mutableStateOf<Rect?>(null) }
     var requested by remember { mutableStateOf("$url#$navId") }
 
     fun startScript(): String = when {
@@ -75,6 +83,43 @@ actual fun ForcerWebView(
         }
     }
 
+    // El navegador nace y muere con esta pantalla
+    DisposableEffect(Unit) {
+        val v = host.createWebView(desktop, !captureMode && config != null, callbacks)
+        host.setStartScript(v, startScript())
+        host.loadUrl(v, url)
+        view = v
+        onDispose {
+            host.destroyWebView(v)
+            view = null
+        }
+    }
+
+    // Colocar la capa nativa sobre el hueco de Compose (px → puntos)
+    LaunchedEffect(view, bounds, covered) {
+        val v = view ?: return@LaunchedEffect
+        val b = bounds ?: return@LaunchedEffect
+        host.layoutWebView(
+            v,
+            (b.left / density).toDouble(),
+            (b.top / density).toDouble(),
+            (b.width / density).toDouble(),
+            (b.height / density).toDouble(),
+            covered,
+        )
+    }
+
+    // «Ir» / reiniciar: nueva carga aunque la URL sea la misma
+    LaunchedEffect(view, url, navId) {
+        val v = view ?: return@LaunchedEffect
+        val key = "$url#$navId"
+        if (key != requested) {
+            requested = key
+            host.setStartScript(v, startScript())
+            host.loadUrl(v, url)
+        }
+    }
+
     // Armar/desarmar la captura sin recargar; el script de arranque se actualiza para las próximas cargas
     LaunchedEffect(armed, view) {
         val v = view ?: return@LaunchedEffect
@@ -90,24 +135,7 @@ actual fun ForcerWebView(
         if (triggerNonce > 0) host.evaluate(v, "window.OmniWeb&&OmniWeb.trigger()")
     }
 
-    UIKitView(
-        factory = {
-            val v = host.createWebView(desktop, !captureMode && config != null, callbacks)
-            host.setStartScript(v, startScript())
-            host.loadUrl(v, url)
-            view = v
-            v
-        },
-        modifier = modifier,
-        update = { v ->
-            val key = "$url#$navId"
-            if (key != requested) {
-                requested = key
-                host.setStartScript(v, startScript())
-                host.loadUrl(v, url)
-            }
-        },
-    )
+    Box(modifier.onGloballyPositioned { bounds = it.boundsInRoot() })
 }
 
 /** iOS: descarga con `URLSession` (en Swift). Las data: URL se devuelven tal cual. */

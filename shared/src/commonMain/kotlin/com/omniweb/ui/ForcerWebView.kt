@@ -44,6 +44,8 @@ expect fun ForcerWebView(
     /** Gestos ocultos NATIVOS del efecto (iOS: esquinas dentro del navegador, porque Compose queda por debajo). */
     onHiddenTap: (() -> Unit)? = null,
     onHiddenLongPress: (() -> Unit)? = null,
+    /** Un diálogo de Compose está encima: en iOS el navegador es una capa nativa y se oculta para no taparlo. */
+    covered: Boolean = false,
 )
 
 /** Descarga una imagen y la devuelve como data: URL (null si falla). Android: HttpURLConnection. */

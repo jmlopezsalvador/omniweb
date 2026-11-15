@@ -137,6 +137,22 @@ class ForceStoreTest {
         assertTrue(blobs.m.isEmpty())
     }
 
+    @Test fun summaryDoesNotNeedTheBlobs() {
+        val prefs = MemoryStore()
+        val blobs = MemoryBlobs()
+        assertNull(store(prefs, blobs).summary("s"))
+        store(prefs, blobs).save("s", ForcedItem("data:IMG", listOf("Título", "Fuente"), "<p/>", "p", 1f))
+        blobs.m.clear() // aunque los ficheros grandes no estén, el resumen sale de las preferencias
+        assertEquals("Título", store(prefs, blobs).summary("s")!!.title)
+    }
+
+    @Test fun summaryIsGoneAfterClear() {
+        val st = store()
+        st.save("s", ForcedItem("data:a", listOf("t"), null, "p", 1f))
+        st.clear("s")
+        assertNull(st.summary("s"))
+    }
+
     @Test fun normalizeUrlCases() {
         assertEquals("https://a.com", normalizeUrl("https://a.com"))
         assertEquals("https://a.com", normalizeUrl(" a.com "))

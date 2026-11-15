@@ -26,6 +26,9 @@ data class ForcedItem(
     val aspect: Float,
 )
 
+/** Lo mínimo de un forzaje para pintar la lista: sin leer la imagen (pueden ser MB). */
+data class ForcedSummary(val title: String)
+
 /** Ajustes de un sitio (valen para preparar y para el efecto). */
 data class SiteSettings(
     /** true = fuerza solo al parar el scroll; false = solo con el gesto oculto (esquina inferior derecha / volumen). */
@@ -40,7 +43,7 @@ val IDLE_OPTIONS = listOf(300, 450, 600)
 
 val GOOGLE_IMAGES = Site("google-images", "Google Imágenes", "https://www.google.com/imghp?hl=es")
 val YOUTUBE = Site("youtube", "YouTube", "https://m.youtube.com")
-val AMAZON = Site("amazon", "Amazon", "https://www.amazon.es/s?k=auriculares")
+val AMAZON = Site("amazon", "Amazon", "https://www.amazon.es")
 val BUILT_IN_SITES = listOf(GOOGLE_IMAGES, YOUTUBE, AMAZON)
 
 /** Añade https:// si falta y convierte texto suelto en una búsqueda de Google Imágenes. */
@@ -121,6 +124,15 @@ class ForceStore(private val prefs: KeyValueStore, private val blobs: BlobStore)
     fun practiceMode(): Boolean = prefs.getBoolean("practice", false)
     fun setPracticeMode(on: Boolean) = prefs.putBoolean("practice", on)
 
+    /**
+     * ¿Hay forzaje y cómo se llama? Solo mira las preferencias (número de textos y el primero): la pantalla de inicio
+     * lo usa para todos los sitios y leer las imágenes completas la congelaba ~1 s con unos pocos MB guardados.
+     */
+    fun summary(siteId: String): ForcedSummary? {
+        if (prefs.getLong("f.$siteId.n", 0L) <= 0L) return null
+        return ForcedSummary(prefs.getString("f.$siteId.t0")?.takeIf { it.isNotBlank() } ?: "imagen")
+    }
+
     fun load(siteId: String): ForcedItem? {
         // Compatibilidad: antes la imagen y el HTML vivían en las preferencias.
         val image = blobs.read("f.$siteId.image") ?: prefs.getString("f.$siteId.image")
@@ -148,6 +160,7 @@ class ForceStore(private val prefs: KeyValueStore, private val blobs: BlobStore)
     }
 
     fun clear(siteId: String) {
+        prefs.putLong("f.$siteId.n", 0L)
         blobs.delete("f.$siteId.image")
         blobs.delete("f.$siteId.html")
         prefs.putString("f.$siteId.image", "")
