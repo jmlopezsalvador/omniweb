@@ -14,6 +14,7 @@
 </style>
 </head>
 <body>
+<img id="logo" alt="logo" style="position:fixed;top:8px;left:8px;width:80px;height:80px;z-index:5">
 <div id="feed"></div>
 <div id="sentinel" style="height:1px"></div>
 <script>
@@ -24,6 +25,7 @@
     return 'data:image/svg+xml;utf8,' + encodeURIComponent(svg);
   }
   var params = new URLSearchParams(location.search);
+  document.getElementById('logo').src = ph(0);
   var rerender = params.get('rerender') === '1'; // simula React/Vue repintando el src
   var feed = document.getElementById('feed');
   var n = 0;

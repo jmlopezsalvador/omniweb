@@ -12,7 +12,7 @@ data class ForceConfig(
     /** Instantánea HTML de la tarjeta capturada; si hay, tiene prioridad sobre `texts`. */
     val html: String? = null,
     val idleMs: Int = 450,
-    /** true = automático al parar el scroll; false = solo manual (gesto oculto). */
+    /** Armado: true = el truco está armado (la siguiente pulsación que no sea scroll fuerza); false = hay que armarlo con el gesto secreto. */
     val auto: Boolean = true,
     /** El motor avisa de la dirección del scroll (la barra inferior decorativa se esconde al bajar). */
     val reportScroll: Boolean = false,
@@ -41,8 +41,8 @@ expect fun ForcerWebView(
     navId: Int = 0,
     /** Pide la web de escritorio (user agent de PC). Se aplica al crear el navegador. */
     desktop: Boolean = false,
-    /** Cada incremento dispara el forzaje a mano (`OmniWeb.trigger()`): gesto oculto en el efecto. */
-    triggerNonce: Int = 0,
+    /** Estado de armado del efecto (activación secreta): al cambiar, el motor se arma o se desarma (`OmniWeb.setArmed`). */
+    effectArmed: Boolean = true,
     /** Gestos ocultos NATIVOS del efecto (iOS: esquinas dentro del navegador, porque Compose queda por debajo). */
     onHiddenTap: (() -> Unit)? = null,
     onHiddenLongPress: (() -> Unit)? = null,
@@ -82,4 +82,4 @@ internal fun ForceConfig.toJs(): String =
     "{imageUrl:${jsQuote(imageUrl)},texts:[${texts.joinToString(",") { jsQuote(it) }}]," +
         (if (html != null) "html:${jsQuote(html)}," else "") +
         (if (reportScroll) "reportScroll:true," else "") +
-        "idleMs:$idleMs,mode:'${if (auto) "auto" else "manual"}'}"
+        "idleMs:$idleMs,mode:'tap',armed:$auto}"

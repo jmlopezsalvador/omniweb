@@ -49,7 +49,7 @@ actual fun ForcerWebView(
     modifier: Modifier,
     navId: Int,
     desktop: Boolean,
-    triggerNonce: Int,
+    effectArmed: Boolean,
     onHiddenTap: (() -> Unit)?,
     onHiddenLongPress: (() -> Unit)?,
     covered: Boolean,
@@ -59,6 +59,7 @@ actual fun ForcerWebView(
     val latestCapture by rememberUpdatedState(onCapture)
     val latestArmed by rememberUpdatedState(armed)
     val latestInfo by rememberUpdatedState(onPageInfo)
+    val latestConfig by rememberUpdatedState(config)
     val latestScroll by rememberUpdatedState(onScroll)
     var webView by remember { mutableStateOf<WebView?>(null) }
     var canGoBack by remember { mutableStateOf(false) }
@@ -70,9 +71,9 @@ actual fun ForcerWebView(
         }
     }
 
-    // Disparo manual oculto (esquina / volumen): el motor ya sabe si hay un candidato y si ya forzó
-    LaunchedEffect(triggerNonce, webView) {
-        if (triggerNonce > 0) webView?.evaluateJavascript("window.OmniWeb&&OmniWeb.trigger()", null)
+    // Activación secreta: armar / desarmar el truco sin recargar (la config de las próximas cargas lleva el estado vigente)
+    LaunchedEffect(effectArmed, webView) {
+        if (!captureMode) webView?.evaluateJavascript("window.OmniWeb&&OmniWeb.setArmed($effectArmed)", null)
     }
 
     BackHandler {
@@ -120,12 +121,12 @@ actual fun ForcerWebView(
                     // El motor (~20 KB, idempotente) entra al empezar la página; la configuración, que puede llevar
                     // MB de imagen, solo al terminar (antes se evaluaba dos veces por página).
                     override fun onPageStarted(view: WebView, u: String?, favicon: Bitmap?) {
-                        if (captureMode || config != null) view.evaluateJavascript("if(!window.OmniWeb){$bundle}", null)
+                        if (captureMode || latestConfig != null) view.evaluateJavascript("if(!window.OmniWeb){$bundle}", null)
                     }
                     override fun onPageFinished(view: WebView, u: String?) {
                         val start = when {
                             captureMode -> if (latestArmed) "OmniWeb.startCapture();" else ""
-                            config != null -> "OmniWeb.configure(${config.toJs()});"
+                            latestConfig != null -> "OmniWeb.configure(${latestConfig!!.toJs()});"
                             else -> ""
                         }
                         if (start.isNotEmpty()) view.evaluateJavascript("if(!window.OmniWeb){$bundle}$start", null)

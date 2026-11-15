@@ -20,3 +20,6 @@ expect fun clearBrowsingData()
 
 /** true en iOS: elige el estilo del marco de navegador (Safari con barra inferior) frente al de Android (Chrome). */
 expect fun isIosPlatform(): Boolean
+
+/** Vibración de confirmación al armar (`armed=true`: un pulso) o desarmar (`false`: dos pulsos cortos). */
+expect fun vibrateFeedback(armed: Boolean)

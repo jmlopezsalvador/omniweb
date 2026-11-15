@@ -39,7 +39,7 @@ actual fun ForcerWebView(
     modifier: Modifier,
     navId: Int,
     desktop: Boolean,
-    triggerNonce: Int,
+    effectArmed: Boolean,
     onHiddenTap: (() -> Unit)?,
     onHiddenLongPress: (() -> Unit)?,
     covered: Boolean,
@@ -141,10 +141,13 @@ actual fun ForcerWebView(
         }
     }
 
-    // Disparo manual (volumen / esquina)
-    LaunchedEffect(triggerNonce, view) {
+    // Activación secreta: armar / desarmar sin recargar; el script de arranque lleva el estado vigente para las próximas cargas
+    LaunchedEffect(effectArmed, view) {
         val v = view ?: return@LaunchedEffect
-        if (triggerNonce > 0) host.evaluate(v, "window.OmniWeb&&OmniWeb.trigger()")
+        if (!captureMode) {
+            host.setStartScript(v, startScript())
+            host.evaluate(v, "window.OmniWeb&&OmniWeb.setArmed($effectArmed)")
+        }
     }
 
     Box(modifier.onGloballyPositioned { bounds = it.boundsInRoot() })

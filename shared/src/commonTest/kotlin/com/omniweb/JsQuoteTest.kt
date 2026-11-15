@@ -27,13 +27,13 @@ class JsQuoteTest {
     @Test fun configLiteralIsWellFormed() {
         val js = ForceConfig("data:image/png;base64,AA", listOf("a\"b", "c"), "<p class=\"x\">hola</p>", 600, false).toJs()
         assertTrue(js.startsWith("{imageUrl:\"data:image/png;base64,AA\",texts:[\"a\\\"b\",\"c\"],html:"))
-        assertTrue(js.endsWith("idleMs:600,mode:'manual'}"))
+        assertTrue(js.endsWith("idleMs:600,mode:'tap',armed:false}"))
         assertFalse(js.contains("\n"))
     }
 
     @Test fun configWithoutHtmlOmitsTheField() {
         val js = ForceConfig("u", emptyList()).toJs()
-        assertEquals("{imageUrl:\"u\",texts:[],idleMs:450,mode:'auto'}", js)
+        assertEquals("{imageUrl:\"u\",texts:[],idleMs:450,mode:'tap',armed:true}", js)
     }
 
     @Test fun reportScrollIsOptIn() {

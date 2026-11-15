@@ -59,3 +59,39 @@ export function findCandidate(doc: Document, x: number, y: number): Candidate | 
   }
   return null;
 }
+
+function classTokens(e: Element): string[] {
+  return (typeof e.className === 'string' ? e.className : '').split(/\s+/).filter(Boolean);
+}
+
+/** Dos elementos «de la misma familia»: misma etiqueta y, si tienen clases, al menos una en común. */
+function similar(a: Element, b: Element): boolean {
+  if (a.tagName !== b.tagName) return false;
+  const ta = classTokens(a);
+  const tb = classTokens(b);
+  if (!ta.length && !tb.length) return true;
+  return ta.some((t) => tb.includes(t));
+}
+
+function hasMedia(e: Element): boolean {
+  return !!mediaKind(e) || !!e.querySelector('img,video,[style*="background-image"]');
+}
+
+/**
+ * ¿La tarjeta candidata forma parte de un LISTADO? Sube desde el medio hasta encontrar un ancestro que tenga al menos 2
+ * hermanos de su misma familia con medios. Así se ignoran logos, cabeceras y banners (el logo de Google antes de buscar)
+ * y solo se fuerza un resultado de verdad. Con layout, además, el medio debe tener un tamaño mínimo.
+ */
+export function isListItem(c: Candidate): boolean {
+  const mr = c.media.getBoundingClientRect();
+  if (mr.height > 0 && (mr.width < 60 || mr.height < 60)) return false;
+  const body = c.media.ownerDocument.body;
+  let el: Element | null = c.media;
+  for (let depth = 0; el && depth < 12; depth++, el = el.parentElement) {
+    const parent: Element | null = el.parentElement;
+    if (!parent || parent === body) break;
+    const sibs = Array.from(parent.children).filter((s) => s !== el && similar(s, el!) && hasMedia(s));
+    if (sibs.length >= 2) return true;
+  }
+  return false;
+}

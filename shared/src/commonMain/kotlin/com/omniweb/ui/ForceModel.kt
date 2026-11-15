@@ -31,7 +31,7 @@ data class ForcedSummary(val title: String)
 
 /** Ajustes de un sitio (valen para preparar y para el efecto). */
 data class SiteSettings(
-    /** true = fuerza solo al parar el scroll; false = solo con el gesto oculto (esquina inferior derecha / volumen). */
+    /** Armado: true = el efecto arranca armado (la siguiente pulsación que no sea scroll fuerza); false = se arma con el gesto secreto (esquina inferior derecha / volumen), con vibración. */
     val auto: Boolean = true,
     /** Tiempo sin scroll para considerar que el espectador ha parado. */
     val idleMs: Int = 450,
@@ -57,6 +57,10 @@ fun normalizeUrl(input: String): String {
         else -> "https://www.google.com/search?tbm=isch&q=${t.replace(' ', '+')}"
     }
 }
+
+/** Nombre por defecto de un sitio añadido: el dominio (sin www) o, en archivos locales, el nombre del fichero. */
+fun siteNameFor(url: String): String =
+    if (url.startsWith("file://")) url.substringAfterLast('/').ifBlank { url } else displayHost(url)
 
 private val INTERNAL_SCHEMES = setOf("http", "https", "about", "data", "blob", "file", "javascript")
 
@@ -123,6 +127,10 @@ class ForceStore(private val prefs: KeyValueStore, private val blobs: BlobStore)
         prefs.putBoolean("s.$siteId.desktop", s.desktop)
         prefs.putBoolean("s.$siteId.chrome", s.chrome)
     }
+
+    /** Vibración al armar/desarmar el efecto con el gesto secreto. */
+    fun haptics(): Boolean = prefs.getBoolean("haptics", true)
+    fun setHaptics(on: Boolean) = prefs.putBoolean("haptics", on)
 
     /** Modo práctica: al salir del efecto se borran historial, cookies y caché. */
     fun practiceMode(): Boolean = prefs.getBoolean("practice", false)

@@ -117,6 +117,7 @@ fun OmniWebRoot(prefs: KeyValueStore, blobs: BlobStore) {
                     site = s.site,
                     item = s.item,
                     settings = store.settings(s.site.id),
+                    haptics = store.haptics(),
                     onExit = {
                         // Modo práctica: no dejar rastros del ensayo
                         if (store.practiceMode()) {
@@ -152,6 +153,7 @@ private fun HomeScreen(
     var confirmClear by remember { mutableStateOf(false) }
     val sites = remember(version) { store.sites() }
     val practice = remember(version) { store.practiceMode() }
+    val haptics = remember(version) { store.haptics() }
 
     Column(Modifier.fillMaxSize().navigationBarsPadding().imePadding().padding(horizontal = 20.dp).padding(top = 16.dp, bottom = 12.dp)) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
@@ -185,6 +187,16 @@ private fun HomeScreen(
                 Switch(checked = practice, onCheckedChange = { store.setPracticeMode(it); onChanged() })
             }
         }
+        Spacer(Modifier.height(8.dp))
+        Surface(color = MaterialTheme.colorScheme.surface, shape = RoundedCornerShape(18.dp), modifier = Modifier.fillMaxWidth()) {
+            Row(Modifier.padding(horizontal = 16.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text("Vibración al armar", style = MaterialTheme.typography.titleMedium)
+                    Text("El móvil vibra al armar (un pulso) o desarmar (dos) el efecto con el gesto secreto.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+                Switch(checked = haptics, onCheckedChange = { store.setHaptics(it); onChanged() })
+            }
+        }
         Spacer(Modifier.height(10.dp))
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             OutlinedTextField(
@@ -200,7 +212,7 @@ private fun HomeScreen(
                 onClick = {
                     if (newUrl.isNotBlank()) {
                         val url = normalizeUrl(newUrl)
-                        store.addSite(url.removePrefix("https://").removePrefix("http://").removePrefix("www.").substringBefore('/'), url)
+                        store.addSite(siteNameFor(url), url)
                         newUrl = ""
                         onChanged()
                     }
@@ -271,7 +283,7 @@ private fun SiteCard(
                 IconButton(onClick = onSettings) { MoreIcon(MaterialTheme.colorScheme.onSurfaceVariant) }
             }
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                Pill(if (settings.auto) "Automático" else "Manual")
+                Pill(if (settings.auto) "Armado" else "Arma con gesto")
                 Pill(if (settings.desktop) "Escritorio" else "Móvil")
                 if (!settings.chrome) Pill("Sin marco")
                 Pill("${settings.idleMs} ms")
@@ -325,13 +337,14 @@ private fun SiteSettingsDialog(
         title = { Text("Ajustes de ${site.name}") },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                Text("Disparo", style = MaterialTheme.typography.labelLarge)
+                Text("Armado", style = MaterialTheme.typography.labelLarge)
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    FilterChip(selected = s.auto, onClick = { update(s.copy(auto = true)) }, label = { Text("Automático") })
-                    FilterChip(selected = !s.auto, onClick = { update(s.copy(auto = false)) }, label = { Text("Manual") })
+                    FilterChip(selected = s.auto, onClick = { update(s.copy(auto = true)) }, label = { Text("Desde el inicio") })
+                    FilterChip(selected = !s.auto, onClick = { update(s.copy(auto = false)) }, label = { Text("Con gesto secreto") })
                 }
                 Text(
-                    if (s.auto) "Fuerza al parar el scroll. También vale el gesto oculto." else "Solo fuerza con el gesto oculto: toque en la esquina inferior derecha o botón de volumen.",
+                    if (s.auto) "El efecto arranca armado: cuando se desliza, se para y se pulsa un elemento de la lista, se fuerza."
+                    else "El efecto arranca como una web normal (para hacer una demostración). Al armarlo con el gesto secreto (botón de volumen o toque abajo a la derecha) el móvil vibra y la siguiente pulsación que no sea scroll fuerza.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -484,13 +497,19 @@ private fun CaptureScreen(site: Site, store: ForceStore, onDone: (saved: Boolean
  * El marco es decorativo y se puede apagar. El mago o el espectador busca lo que quiera.
  * Gestos ocultos:
  * - pulsación larga en la **barra de URL** (o, sin marco, en la zona superior CENTRAL): menú oculto;
- * - toque en la esquina INFERIOR DERECHA o botón de volumen: dispara a mano;
+ * - toque en la esquina INFERIOR DERECHA o botón de volumen: ARMA/DESARMA el truco (vibra). Armado, la siguiente pulsación que no
+ *   sea scroll sobre un elemento de la lista (con la lista en reposo) lo fuerza;
  * «Atrás» solo navega por la web; no sale del efecto.
  */
 @Composable
-private fun EffectScreen(site: Site, item: ForcedItem, settings: SiteSettings, onExit: () -> Unit) {
+private fun EffectScreen(site: Site, item: ForcedItem, settings: SiteSettings, haptics: Boolean, onExit: () -> Unit) {
     var navId by remember { mutableStateOf(0) }
-    var trigger by remember { mutableStateOf(0) }
+    // Armado: arranca según el ajuste y la activación secreta lo conmuta (con vibración de confirmación)
+    var armedNow by remember { mutableStateOf(settings.auto) }
+    val activate: () -> Unit = {
+        armedNow = !armedNow
+        if (haptics) vibrateFeedback(armedNow)
+    }
     var realWeb by remember { mutableStateOf(false) }
     var menu by remember { mutableStateOf(false) }
     var chrome by remember { mutableStateOf(settings.chrome) }
@@ -498,7 +517,7 @@ private fun EffectScreen(site: Site, item: ForcedItem, settings: SiteSettings, o
     var bottomVisible by remember { mutableStateOf(true) }
     val ios = isIosPlatform()
 
-    VolumeKeyEffect(enabled = !realWeb && !menu) { trigger++ }
+    VolumeKeyEffect(enabled = !realWeb && !menu) { activate() }
 
     Column(Modifier.fillMaxSize().background(Color.Black)) {
         if (chrome) {
@@ -514,7 +533,7 @@ private fun EffectScreen(site: Site, item: ForcedItem, settings: SiteSettings, o
                     texts = item.texts,
                     html = item.html,
                     idleMs = settings.idleMs,
-                    auto = settings.auto,
+                    auto = armedNow,
                     reportScroll = chrome && ios,
                 ),
                 captureMode = false,
@@ -524,15 +543,15 @@ private fun EffectScreen(site: Site, item: ForcedItem, settings: SiteSettings, o
                 modifier = Modifier.fillMaxSize(),
                 navId = navId,
                 desktop = settings.desktop,
-                triggerNonce = trigger,
-                onHiddenTap = { trigger++ },
+                effectArmed = armedNow,
+                onHiddenTap = { activate() },
                 onHiddenLongPress = { menu = true },
                 covered = menu,
                 onPageInfo = { url, _ -> if (url.isNotBlank()) pageUrl = url },
                 onScroll = { down -> bottomVisible = !down },
             )
             // Zonas ocultas en Android (en iOS son vistas nativas dentro de la capa del navegador)
-            HiddenCorner(Modifier.align(Alignment.BottomEnd), onTap = { trigger++ })
+            HiddenCorner(Modifier.align(Alignment.BottomEnd), onTap = { activate() })
             if (!chrome) HiddenCorner(Modifier.align(Alignment.TopCenter), onLongPress = { menu = true }, width = 180.dp, height = 64.dp)
         }
         if (chrome && ios) BrowserBottomBar(visible = bottomVisible) else Box(Modifier.fillMaxWidth().navigationBarsPadding())
@@ -544,7 +563,7 @@ private fun EffectScreen(site: Site, item: ForcedItem, settings: SiteSettings, o
             title = { Text("Opciones ocultas") },
             text = {
                 Column {
-                    TextButton(onClick = { realWeb = false; navId++; menu = false }) { Text("Reiniciar el efecto (recarga y vuelve a armar)") }
+                    TextButton(onClick = { realWeb = false; armedNow = settings.auto; navId++; menu = false }) { Text("Reiniciar el efecto (recarga y vuelve al estado inicial)") }
                     TextButton(onClick = { realWeb = !realWeb; navId++; menu = false }) {
                         Text(if (realWeb) "Reanudar el forzaje" else "Mostrar la web real (sin forzar)")
                     }

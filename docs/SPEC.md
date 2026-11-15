@@ -173,6 +173,12 @@ Sustituye a «sustituir al parar el scroll» (RF-04) y al disparo inmediato (RF-
 - **RF-32** **Zona oculta del menú**: **arriba en el centro**, grande (≈160×64 pt), y coincide con la **barra de URL decorativa**: una pulsación larga ahí abre el menú.
   Con el marco apagado la zona sigue existiendo, invisible. Se retira la esquina superior izquierda.
 
+- **RF-36** **Vibración al armar**: cuando el mago activa el modo forzaje (le da la orden en secreto de que **la siguiente pulsación que no sea un scroll fuerce**),
+  el móvil **vibra una vez** como confirmación. Si vuelve a dar la orden y **desarma**, vibra con un patrón distinto (dos pulsos cortos). No vibra si el efecto
+  arranca ya armado. Ajuste general «Vibración al armar» (activado por defecto). Android: `Vibrator` (permiso `VIBRATE`); iOS: háptico del sistema.
+- **RF-37** «Pulsación que no es scroll» = toque corto (<10 px y <300 ms) **con la lista en reposo** (sin scroll desde hace `idleMs`): el toque que frena la inercia no cuenta.
+- **Ajuste «Armado»** (sustituye a Automático/Manual): *Desde el inicio* (el efecto ya está armado, no vibra) o *Con gesto secreto* (hay que armarlo; vibra al hacerlo).
+
 ### 10.5 La app (fuera del efecto)
 - **RF-33** **Barra de navegación inferior** en la app, con pestañas. La primera, **Favoritos**, es como la página de inicio de un navegador: **cuadrícula de iconos** de los sitios con su logo.
   Otras pestañas previstas: Rastros/Modo práctica, Ajustes generales, Ayuda.

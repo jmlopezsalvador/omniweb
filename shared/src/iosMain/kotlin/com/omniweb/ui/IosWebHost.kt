@@ -72,6 +72,9 @@ interface WebViewHost {
     fun writeBlob(name: String, data: String)
     fun deleteBlob(name: String)
 
+    /** Vibración de confirmación: `armed=true` un pulso, `false` dos pulsos cortos. */
+    fun vibrate(armed: Boolean)
+
     /** Pantalla encendida mientras dura el efecto. */
     fun setImmersive(on: Boolean)
 

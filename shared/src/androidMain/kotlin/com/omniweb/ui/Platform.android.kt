@@ -3,6 +3,10 @@ package com.omniweb.ui
 import android.app.Activity
 import android.content.Context
 import android.content.ContextWrapper
+import android.os.Build
+import android.os.VibrationEffect
+import android.os.Vibrator
+import android.os.VibratorManager
 import android.webkit.CookieManager
 import android.webkit.WebStorage
 import android.webkit.WebView
@@ -103,3 +107,21 @@ class FileBlobStore(context: Context) : BlobStore {
 }
 
 actual fun isIosPlatform(): Boolean = false
+
+/** Un pulso largo al armar; dos pulsos cortos al desarmar. */
+actual fun vibrateFeedback(armed: Boolean) {
+    val ctx = AndroidApp.context
+    val vibrator: Vibrator = if (Build.VERSION.SDK_INT >= 31) {
+        ctx.getSystemService(VibratorManager::class.java).defaultVibrator
+    } else {
+        @Suppress("DEPRECATION")
+        ctx.getSystemService(Context.VIBRATOR_SERVICE) as Vibrator
+    }
+    if (!vibrator.hasVibrator()) return
+    val effect = if (armed) {
+        VibrationEffect.createOneShot(70, VibrationEffect.DEFAULT_AMPLITUDE)
+    } else {
+        VibrationEffect.createWaveform(longArrayOf(0, 40, 90, 40), -1)
+    }
+    vibrator.vibrate(effect)
+}

@@ -301,6 +301,16 @@ final class OmniWebHost: NSObject, WebViewHost {
 
     // MARK: Sistema
 
+    func vibrate(armed: Bool) {
+        if armed {
+            UINotificationFeedbackGenerator().notificationOccurred(.success)
+        } else {
+            let generator = UIImpactFeedbackGenerator(style: .light)
+            generator.impactOccurred()
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.12) { generator.impactOccurred() }
+        }
+    }
+
     func setImmersive(on: Bool) {
         UIApplication.shared.isIdleTimerDisabled = on
     }

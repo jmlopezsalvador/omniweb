@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest';
+import { isListItem } from './candidate';
 import { applySnapshot, applyTexts, collectTexts, findTextContainer, imageAsDataUrl, mediaUrl, snapshotCard } from './apply';
 
 const card = (n: number) =>
@@ -241,5 +242,34 @@ describe('elementos con guion no definidos (inertes)', () => {
   it('sí se clona una tarjeta con <w-debug-content> sin definir', () => {
     document.body.innerHTML = '<div id="g"><div class="c"><img src="a.jpg"><w-debug-content></w-debug-content><span>Hola</span></div><div class="c"><img src="b.jpg"></div></div>';
     expect(snapshotCard(document.querySelector('img')!)).toContain('Hola');
+  });
+});
+
+describe('isListItem (solo elementos de un listado)', () => {
+  it('una tarjeta con hermanas de la misma familia es de lista', () => {
+    document.body.innerHTML = '<div id="l"><div class="c"><img src="a.jpg"></div><div class="c"><img src="b.jpg"></div><div class="c"><img src="c.jpg"></div></div>';
+    const img = document.querySelector('img')!;
+    expect(isListItem({ media: img, card: img.parentElement! })).toBe(true);
+  });
+  it('un logo suelto no lo es', () => {
+    document.body.innerHTML = '<header><a><img id="logo" src="logo.png"></a></header><main><div class="c"><img src="a.jpg"></div><div class="c"><img src="b.jpg"></div><div class="c"><img src="c.jpg"></div></main>';
+    const logo = document.getElementById('logo')!;
+    expect(isListItem({ media: logo, card: logo.parentElement! })).toBe(false);
+  });
+  it('dos tarjetas solo (una hermana) no bastan', () => {
+    document.body.innerHTML = '<div><div class="c"><img src="a.jpg"></div><div class="c"><img src="b.jpg"></div></div>';
+    const img = document.querySelector('img')!;
+    expect(isListItem({ media: img, card: img.parentElement! })).toBe(false);
+  });
+  it('hermanas de otra familia (otra etiqueta/clase) no cuentan', () => {
+    document.body.innerHTML = '<div><div class="a"><img src="a.jpg"></div><span class="b"><img src="b.jpg"></span><p class="z"><img src="c.jpg"></p></div>';
+    const img = document.querySelector('img')!;
+    expect(isListItem({ media: img, card: img.parentElement! })).toBe(false);
+  });
+  it('un medio pequeño (icono) se ignora cuando hay layout', () => {
+    document.body.innerHTML = '<div><div class="c"><img id="i" src="a.jpg"></div><div class="c"><img src="b.jpg"></div><div class="c"><img src="c.jpg"></div></div>';
+    const img = document.getElementById('i')!;
+    img.getBoundingClientRect = () => ({ width: 20, height: 20, top: 0, left: 0, right: 20, bottom: 20, x: 0, y: 0 } as DOMRect);
+    expect(isListItem({ media: img, card: img.parentElement! })).toBe(false);
   });
 });

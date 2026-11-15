@@ -1,7 +1,8 @@
 import { applyImage, applySnapshot, applySnapshotAt, applyTexts, applyTitleNear, FORCED_ATTR, normalizeImageUrl } from './apply';
 import { createCaptureMode } from './capture';
-import { findCandidate } from './candidate';
+import { findCandidate, isListItem, type Candidate } from './candidate';
 import { createIdleDetector } from './idle';
+import { createTapTrigger } from './tap';
 
 export interface OmniConfig {
   imageUrl: string;
@@ -13,8 +14,13 @@ export interface OmniConfig {
   idleMs?: number;
   /** Avisar a la app de la dirección del scroll (barra inferior decorativa que se esconde al bajar). */
   reportScroll?: boolean;
-  /** 'auto': al parar el scroll. 'manual': solo con OmniWeb.trigger(). */
-  mode?: 'auto' | 'manual';
+  /**
+   * 'tap' (el efecto real): con el truco armado, fuerza al TOCAR un elemento de la lista en reposo.
+   * 'auto' (heredado): al parar el scroll. 'manual': solo con OmniWeb.trigger().
+   */
+  mode?: 'tap' | 'auto' | 'manual';
+  /** Modo 'tap': ¿empieza armado? Si no, hay que llamar a `OmniWeb.setArmed(true)` (activación secreta). */
+  armed?: boolean;
 }
 
 interface Forced {
@@ -35,7 +41,21 @@ function install(win: Window & typeof globalThis) {
   let forced: Forced | null = null;
   let guard = false; // evita bucles con nuestro propio MutationObserver
 
-  const idle = createIdleDetector(win, { idleMs: 450, onIdle: () => cfg?.mode !== 'manual' && trigger() });
+  const idle = createIdleDetector(win, { idleMs: 450, onIdle: () => (cfg?.mode === 'auto' || cfg?.mode === undefined) && trigger() });
+
+  // Disparo por toque (modo 'tap')
+  const tap = createTapTrigger(win, {
+    idleMs: 450,
+    canTap: (x, y) => {
+      if (!cfg || cfg.mode !== 'tap' || forced) return false;
+      const c = findCandidate(doc, x, y);
+      return !!c && isListItem(c);
+    },
+    onTap: (x, y) => {
+      const c = findCandidate(doc, x, y);
+      return !!c && forceAt(c);
+    },
+  });
 
   function reapply() {
     if (!forced || !cfg || guard) return;
@@ -54,7 +74,7 @@ function install(win: Window & typeof globalThis) {
       // el framework ha repintado: buscamos de nuevo el elemento más centrado
       forced.observer.disconnect();
       forced = null;
-      trigger();
+      if (cfg.mode !== 'tap') trigger(); // en modo toque no se re-fuerza en otro sitio
       return;
     }
     if (!forced.isApplied()) {
@@ -73,6 +93,7 @@ function install(win: Window & typeof globalThis) {
     }
   }
 
+  /** Fuerza en el elemento central de la pantalla (modos 'auto' y 'manual'). */
   function trigger(): boolean {
     if (!cfg || forced) return false;
     const c = findCandidate(doc, win.innerWidth / 2, win.innerHeight / 2);
@@ -80,6 +101,12 @@ function install(win: Window & typeof globalThis) {
       console.log('[OmniWeb] sin candidato en el centro');
       return false;
     }
+    return forceAt(c);
+  }
+
+  /** Sustituye la tarjeta `c` por la guardada (instantánea o imagen + textos). */
+  function forceAt(c: Candidate): boolean {
+    if (!cfg || forced) return false;
     guard = true;
     if (cfg.html) {
       const snap = applySnapshot(c.media, cfg.html, cfg.imageUrl);
@@ -128,7 +155,7 @@ function install(win: Window & typeof globalThis) {
     forced?.observer.disconnect();
     forced = null;
     doc.querySelectorAll(`[${FORCED_ATTR}]`).forEach((e) => e.removeAttribute(FORCED_ATTR));
-    idle.arm();
+    if (cfg?.mode !== 'tap') idle.arm();
   }
 
   const capture = createCaptureMode(win, (c) => {
@@ -175,14 +202,29 @@ function install(win: Window & typeof globalThis) {
     configure(c: OmniConfig) {
       cfg = { mode: 'auto', idleMs: 450, ...c, imageUrl: normalizeImageUrl(c.imageUrl) };
       idle.setIdleMs(cfg.idleMs!);
+      tap.setIdleMs(cfg.idleMs!);
       forced = null;
-      idle.arm();
+      if (cfg.mode === 'tap') {
+        idle.disarm();
+        tap.setArmed(cfg.armed !== false);
+      } else {
+        tap.setArmed(false);
+        idle.arm();
+      }
     },
     trigger,
+    /** Activación secreta (modo 'tap'): armar o desarmar el truco. */
+    setArmed(on: boolean) {
+      tap.setArmed(on);
+    },
+    get armed() {
+      return tap.isArmed();
+    },
     reset,
     disarm() {
       cfg = null;
       idle.disarm();
+      tap.setArmed(false);
     },
     get forced() {
       return !!forced;

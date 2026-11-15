@@ -68,3 +68,8 @@ class UserDefaultsStore : KeyValueStore {
 }
 
 actual fun isIosPlatform(): Boolean = true
+
+/** iOS: háptico del sistema, en Swift. */
+actual fun vibrateFeedback(armed: Boolean) {
+    iosWebHost?.vibrate(armed)
+}

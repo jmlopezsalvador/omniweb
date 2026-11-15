@@ -88,11 +88,23 @@ class ForceStoreTest {
         assertFalse(store(prefs).settings("s").chrome)
     }
 
+    @Test fun siteNames() {
+        assertEquals("wikipedia.org", com.omniweb.ui.siteNameFor("https://www.wikipedia.org/wiki/X"))
+        assertEquals("page.html", com.omniweb.ui.siteNameFor("file:///android_asset/test/page.html"))
+    }
+
     @Test fun displayHostShowsOnlyTheDomain() {
         assertEquals("google.com", com.omniweb.ui.displayHost("https://www.google.com/search?q=gatos&udm=2"))
         assertEquals("youtube.com", com.omniweb.ui.displayHost("https://m.youtube.com/results?search_query=x"))
         assertEquals("amazon.es", com.omniweb.ui.displayHost("https://www.amazon.es"))
         assertEquals("localhost:8080", com.omniweb.ui.displayHost("http://localhost:8080/a#b"))
+    }
+
+    @Test fun hapticsDefaultOnAndPersists() {
+        val prefs = MemoryStore()
+        assertTrue(store(prefs).haptics())
+        store(prefs).setHaptics(false)
+        assertFalse(store(prefs).haptics())
     }
 
     @Test fun practiceModeFlag() {
