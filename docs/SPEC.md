@@ -181,6 +181,7 @@ Sustituye a «sustituir al parar el scroll» (RF-04) y al disparo inmediato (RF-
 - **Ajuste «Armado»** (sustituye a Automático/Manual): *Desde el inicio* (el efecto ya está armado, no vibra) o *Con gesto secreto* (hay que armarlo; vibra al hacerlo).
 
 ### 10.5 La app (fuera del efecto)
+> **Estado 6e (Android hecho):** barra inferior Favoritos/Ajustes y favicons descargados del propio sitio. iOS escrito, sin verificar.
 - **RF-33** **Barra de navegación inferior** en la app, con pestañas. La primera, **Favoritos**, es como la página de inicio de un navegador: **cuadrícula de iconos** de los sitios con su logo.
   Otras pestañas previstas: Rastros/Modo práctica, Ajustes generales, Ayuda.
 - **RF-34** Logos de los sitios: **no se incluyen logos de terceros en la app** (requisito §6 y marcas registradas). Se usará el **favicon que publica cada sitio** (lo que hace cualquier navegador), descargado en el

@@ -92,6 +92,7 @@ fun OmniWebRoot(prefs: KeyValueStore, blobs: BlobStore) {
             when (val s = screen) {
                 Screen.Home -> HomeScreen(
                     store = store,
+                    blobs = blobs,
                     version = version,
                     message = message,
                     onPrepare = { message = null; screen = Screen.CaptureOf(it) },
@@ -139,171 +140,8 @@ fun OmniWebRoot(prefs: KeyValueStore, blobs: BlobStore) {
     }
 }
 
-// ───────────────────────────── Inicio ─────────────────────────────
-
-private val AvatarColors = listOf(0xFF6C5CE7, 0xFF00A383, 0xFFE17055, 0xFF0984E3, 0xFFD6336C, 0xFFB7791F)
-
 @Composable
-private fun HomeScreen(
-    store: ForceStore,
-    version: Int,
-    message: String?,
-    onPrepare: (Site) -> Unit,
-    onEffect: (Site) -> Unit,
-    onChanged: () -> Unit,
-    onMessage: (String?) -> Unit,
-) {
-    var newUrl by remember { mutableStateOf("") }
-    var settingsFor by remember { mutableStateOf<Site?>(null) }
-    var confirmClear by remember { mutableStateOf(false) }
-    val sites = remember(version) { store.sites() }
-    val practice = remember(version) { store.practiceMode() }
-    val haptics = remember(version) { store.haptics() }
-
-    Column(Modifier.fillMaxSize().navigationBarsPadding().imePadding().padding(horizontal = 20.dp).padding(top = 16.dp, bottom = 12.dp)) {
-        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            Column(Modifier.weight(1f)) {
-                Text("OmniWeb", style = MaterialTheme.typography.headlineLarge)
-                Text("Prepara un elemento y actúa", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
-            OutlinedButton(onClick = { confirmClear = true }, contentPadding = PaddingValues(horizontal = 14.dp)) { Text("Borrar rastros") }
-        }
-        Spacer(Modifier.height(16.dp))
-        if (message != null) {
-            Surface(color = MaterialTheme.colorScheme.primaryContainer, shape = RoundedCornerShape(14.dp), modifier = Modifier.fillMaxWidth()) {
-                Text(message, color = MaterialTheme.colorScheme.onPrimaryContainer, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(14.dp))
-            }
-            Spacer(Modifier.height(12.dp))
-        }
-        LazyColumn(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            items(sites, key = { it.id }) { site ->
-                val item = remember(version, site.id) { store.summary(site.id) }
-                val st = remember(version, site.id) { store.settings(site.id) }
-                SiteCard(site, item, st, onPrepare = { onPrepare(site) }, onEffect = { onEffect(site) }, onSettings = { settingsFor = site })
-            }
-        }
-        Spacer(Modifier.height(12.dp))
-        Surface(color = MaterialTheme.colorScheme.surface, shape = RoundedCornerShape(18.dp), modifier = Modifier.fillMaxWidth()) {
-            Row(Modifier.padding(horizontal = 16.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
-                Column(Modifier.weight(1f)) {
-                    Text("Modo práctica", style = MaterialTheme.typography.titleMedium)
-                    Text("Al salir del efecto se borran historial, cookies y caché.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                }
-                Switch(checked = practice, onCheckedChange = { store.setPracticeMode(it); onChanged() })
-            }
-        }
-        Spacer(Modifier.height(8.dp))
-        Surface(color = MaterialTheme.colorScheme.surface, shape = RoundedCornerShape(18.dp), modifier = Modifier.fillMaxWidth()) {
-            Row(Modifier.padding(horizontal = 16.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
-                Column(Modifier.weight(1f)) {
-                    Text("Vibración al armar", style = MaterialTheme.typography.titleMedium)
-                    Text("El móvil vibra al armar (un pulso) o desarmar (dos) el efecto con el gesto secreto.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                }
-                Switch(checked = haptics, onCheckedChange = { store.setHaptics(it); onChanged() })
-            }
-        }
-        Spacer(Modifier.height(10.dp))
-        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            OutlinedTextField(
-                value = newUrl,
-                onValueChange = { newUrl = it },
-                placeholder = { Text("Añadir web (ej. wikipedia.org)") },
-                singleLine = true,
-                shape = RoundedCornerShape(16.dp),
-                modifier = Modifier.weight(1f),
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri, imeAction = ImeAction.Done),
-            )
-            Button(
-                onClick = {
-                    if (newUrl.isNotBlank()) {
-                        val url = normalizeUrl(newUrl)
-                        store.addSite(siteNameFor(url), url)
-                        newUrl = ""
-                        onChanged()
-                    }
-                },
-                modifier = Modifier.padding(start = 8.dp).height(56.dp),
-                shape = RoundedCornerShape(16.dp),
-            ) { Text("Añadir") }
-        }
-    }
-
-    settingsFor?.let { site ->
-        SiteSettingsDialog(
-            site = site,
-            settings = store.settings(site.id),
-            hasItem = store.summary(site.id) != null,
-            isCustom = store.isCustom(site.id),
-            onChange = { store.saveSettings(site.id, it); onChanged() },
-            onDeleteItem = { store.clear(site.id); onMessage("Forzaje de ${site.name} borrado."); onChanged(); settingsFor = null },
-            onRemoveSite = { store.removeSite(site.id); onMessage("${site.name} quitado."); onChanged(); settingsFor = null },
-            onClose = { settingsFor = null },
-        )
-    }
-
-    if (confirmClear) {
-        AlertDialog(
-            onDismissRequest = { confirmClear = false },
-            title = { Text("¿Borrar rastros?") },
-            text = { Text("Se borran cookies, historial y caché de todos los sitios. Se cerrarán tus sesiones iniciadas y los avisos de cookies volverán a salir.") },
-            confirmButton = { TextButton(onClick = { clearBrowsingData(); confirmClear = false; onMessage("Rastros borrados.") }) { Text("Borrar") } },
-            dismissButton = { TextButton(onClick = { confirmClear = false }) { Text("Cancelar") } },
-        )
-    }
-}
-
-@Composable
-private fun SiteCard(
-    site: Site,
-    item: ForcedSummary?,
-    settings: SiteSettings,
-    onPrepare: () -> Unit,
-    onEffect: () -> Unit,
-    onSettings: () -> Unit,
-) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(22.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-    ) {
-        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Box(
-                    Modifier.size(46.dp).clip(CircleShape).background(Color(AvatarColors[abs(site.id.hashCode()) % AvatarColors.size])),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Text(site.name.take(1).uppercase(), color = Color.White, style = MaterialTheme.typography.titleLarge)
-                }
-                Spacer(Modifier.size(12.dp))
-                Column(Modifier.weight(1f)) {
-                    Text(site.name, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    Text(
-                        if (item == null) "Sin preparar" else "Preparado · «${item.title}»",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = if (item == null) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.secondary,
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                }
-                IconButton(onClick = onSettings) { MoreIcon(MaterialTheme.colorScheme.onSurfaceVariant) }
-            }
-            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                Pill(if (settings.auto) "Armado" else "Arma con gesto")
-                Pill(if (settings.desktop) "Escritorio" else "Móvil")
-                if (item?.hasDetail == true) Pill("Con ficha")
-                if (!settings.chrome) Pill("Sin marco")
-                Pill("${settings.idleMs} ms")
-            }
-            Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
-                OutlinedButton(onClick = onPrepare, modifier = Modifier.weight(1f).height(46.dp), shape = RoundedCornerShape(14.dp)) { Text("Preparar") }
-                Button(onClick = onEffect, enabled = item != null, modifier = Modifier.weight(1f).height(46.dp), shape = RoundedCornerShape(14.dp)) { Text("Efecto") }
-            }
-        }
-    }
-}
-
-@Composable
-private fun Pill(text: String) {
+internal fun Pill(text: String) {
     Surface(color = MaterialTheme.colorScheme.surfaceVariant, shape = RoundedCornerShape(50)) {
         Text(
             text,
@@ -314,17 +152,8 @@ private fun Pill(text: String) {
     }
 }
 
-/** Tres puntos verticales dibujados (sin depender de iconos de Material). */
 @Composable
-private fun MoreIcon(color: Color) {
-    Canvas(Modifier.size(22.dp)) {
-        val r = 2.2.dp.toPx()
-        for (i in 0..2) drawCircle(color, r, Offset(size.width / 2, size.height * (0.2f + 0.3f * i)))
-    }
-}
-
-@Composable
-private fun SiteSettingsDialog(
+internal fun SiteSettingsDialog(
     site: Site,
     settings: SiteSettings,
     hasItem: Boolean,

@@ -79,6 +79,7 @@ Si la app lleva una página de «Instrucciones» de cara al usuario final, mante
 - Probar en emulador: `adb install -r app/build/outputs/apk/debug/app-debug.apk`, abrir y hacer swipe; captura con `adb exec-out screencap -p`.
 
 ## Estado de fases
+- **Fase 6e hecha en Android (iOS escrito, sin build)**: inicio con barra inferior (Favoritos / Ajustes), cuadrícula de iconos con favicon de cada sitio. Con esto el plan 6a–6e del SPEC §10 está completo; falta VERIFICAR iOS (un solo build con 6a–6e) y probar las webs reales con el toque y la ficha.
 - **Fase 6c hecha en Android (iOS escrito, sin build)**: ficha del objeto en segunda capa. Pendiente 6e (barra inferior de la app, Favoritos, favicons).
 - **Fase 6b+6d hechas en Android (pendiente de iOS)**: el efecto fuerza al TOCAR un elemento de la lista con el truco armado y la lista en reposo (`tap.ts`), activación secreta con vibración. Pendiente 6c (ficha en segunda capa) y 6e.
 - **Fase 6a hecha (aspecto de navegador)**: efecto sin pantalla completa (barra de estado visible), marco decorativo (`BrowserChrome.kt`: Safari con barra inferior que se esconde al bajar en iOS, Chrome en Android), zona oculta del menú arriba-centro (pulsación larga en la barra de URL; sin marco, zona invisible 180×64). Pendientes 6b-6e en `docs/SPEC.md` §10.
@@ -174,3 +175,9 @@ Si la app lleva una página de «Instrucciones» de cara al usuario final, mante
 - iOS: `WebOverlayModel.layers: [Int: WebLayer]` (0 principal, 1 ficha); `createWebView(..., layer:, ...)`. Las esquinas ocultas son solo de la capa 0 y desaparecen mientras haya ficha. Sin ficha, el forzaje sustituye sin abrir nada.
 - Pruebas: la página local de pruebas lleva enlaces `detail.html?n=N` y existe `web/test/detail.html` (se copia a `dist/test/` en el build). En esa página los enlaces no navegan: un `click` de la web se anota en `window.__linkClicked`.
 - Riesgo pendiente de validar con las webs reales: la ficha de Google Imágenes (usar «Fijar ficha») y que las fichas de YouTube/Amazon se abran bien en la segunda capa sin sesión.
+
+## Inicio con pestañas y favicons (6e)
+- `Home.kt`: `HomeScreen` con `BottomTabs` (Favoritos: `LazyVerticalGrid` 3 columnas con `SiteTile` + «Añadir»; Ajustes: modo práctica, vibración, rastros, cómo se usa). Tocar un icono abre la ficha de acciones (Preparar / Efecto / Ajustes). Iconos de pestaña dibujados con `Canvas` (estrella y engranaje).
+- `Favicons.kt`: **no se incluyen logos de terceros**. `rememberFavicon` descarga `<origen>/apple-touch-icon.png` y, si no, `/favicon.ico` DIRECTAMENTE del dominio del sitio (sin servicios intermedios), lo guarda en `BlobStore` (`fav.<id>`; «none» si no hay, para no reintentar) y lo decodifica con `expect fun decodeImageBitmap` (Android `BitmapFactory`; iOS Skia `Image.makeFromEncoded`, sin compilar aún). Si no hay icono, inicial sobre color.
+- Cuidado con los `
+` en cadenas Kotlin al escribir ficheros con scripts: usar cadenas crudas (`"""..."""`) para textos de varias líneas.

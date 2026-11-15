@@ -6,6 +6,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.toComposeImageBitmap
+import org.jetbrains.skia.Image
 import kotlinx.cinterop.ExperimentalForeignApi
 import platform.Foundation.NSUserDefaults
 
@@ -73,3 +76,7 @@ actual fun isIosPlatform(): Boolean = true
 actual fun vibrateFeedback(armed: Boolean) {
     iosWebHost?.vibrate(armed)
 }
+
+/** iOS: Skia (la misma que dibuja Compose) decodifica png, jpg e ico. */
+actual fun decodeImageBitmap(bytes: ByteArray): ImageBitmap? =
+    runCatching { Image.makeFromEncoded(bytes).toComposeImageBitmap() }.getOrNull()
