@@ -1,11 +1,6 @@
 package com.omniweb.ui
 
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.slideInHorizontally
-import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.foundation.Canvas
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
@@ -232,10 +227,16 @@ private fun CaptureScreen(site: Site, store: ForceStore, onDone: (saved: Boolean
     var armed by remember { mutableStateOf(false) }
     var showBar by remember { mutableStateOf(true) }
     var error by remember { mutableStateOf<String?>(null) }
-    var pageUrl by remember { mutableStateOf(site.startUrl) }
-    // Ficha fijada a mano («abre el objeto como lo haría el espectador y pulsa Fijar ficha»): pisa a la detectada
-    var fixedDetail by remember { mutableStateOf<String?>(null) }
+    // Paso 1 = elemento de la lista; paso 2 (opcional) = el medio principal de su FICHA. `listCap` lleva lo ya capturado del paso 1.
+    var listCap by remember { mutableStateOf<Capture?>(null) }
+    var listData by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
+
+    /** Guarda el forzaje (con o sin ficha) y vuelve al inicio. */
+    fun saveAll(list: Capture, data: String, detail: DetailItem?) {
+        store.save(site.id, ForcedItem(data, list.texts, list.html, detail, list.pageUrl, list.aspect))
+        onDone(true)
+    }
 
     Column(Modifier.fillMaxSize()) {
         Surface(color = MaterialTheme.colorScheme.surface, modifier = Modifier.fillMaxWidth()) {
@@ -267,25 +268,32 @@ private fun CaptureScreen(site: Site, store: ForceStore, onDone: (saved: Boolean
                     if (armed) {
                         OutlinedButton(onClick = { armed = false; error = null }, shape = RoundedCornerShape(12.dp)) { Text("Cancelar") }
                     } else {
-                        Button(onClick = { armed = true; error = null }, shape = RoundedCornerShape(12.dp)) { Text("Capturar elemento") }
+                        Button(onClick = { armed = true; error = null }, shape = RoundedCornerShape(12.dp)) {
+                            Text(if (listCap == null) "Capturar elemento" else "Capturar ficha")
+                        }
                     }
                 }
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
                         error ?: when {
-                            armed -> "Toca el elemento que quieres forzar."
-                            fixedDetail != null -> "Ficha fijada: ${shortUrl(fixedDetail!!)}"
-                            else -> "Navega y busca; cuando lo veas, pulsa Capturar."
+                            armed && listCap == null -> "Toca el elemento de la lista que quieres forzar."
+                            armed -> "Toca la imagen principal de la ficha."
+                            listCap != null -> "Paso 2: entra en su ficha (tócalo como el espectador: se abre su panel o página) y pulsa «Capturar ficha»."
+                            else -> "Paso 1: navega y busca; cuando veas el elemento en la lista, pulsa Capturar."
                         },
                         color = if (error == null) MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.error,
                         style = MaterialTheme.typography.bodySmall,
                         modifier = Modifier.weight(1f).padding(horizontal = 6.dp),
                     )
-                    if (!armed) {
+                    if (!armed && listCap != null) {
                         TextButton(
-                            onClick = { fixedDetail = if (fixedDetail == null) pageUrl else null },
+                            onClick = { saveAll(listCap!!, listData!!, null) },
                             contentPadding = PaddingValues(horizontal = 8.dp),
-                        ) { Text(if (fixedDetail == null) "Fijar ficha" else "Quitar ficha") }
+                        ) { Text("Sin ficha") }
+                        TextButton(
+                            onClick = { listCap = null; listData = null; error = null },
+                            contentPadding = PaddingValues(horizontal = 8.dp),
+                        ) { Text("Otro") }
                     }
                 }
             }
@@ -301,21 +309,43 @@ private fun CaptureScreen(site: Site, store: ForceStore, onDone: (saved: Boolean
             navId = navId,
             desktop = siteSettings.desktop,
             covered = pending != null,
-            onPageInfo = { u, _ -> if (u.isNotBlank()) pageUrl = u },
         )
     }
 
     val cap = pending
     if (cap != null) {
+        val first = listCap
+        val isDetail = first != null
+        val texts = if (cap.texts.isEmpty()) "(sin textos)" else cap.texts.joinToString("\n")
+        // Descarga la imagen del elemento (o usa los bytes que ya dio el motor); null si no se pudo
+        suspend fun dataOf(c: Capture) = c.imageData ?: fetchImageDataUrl(c.imageUrl, c.pageUrl)
         AlertDialog(
             onDismissRequest = { if (!saving) pending = null },
-            title = { Text("¿Guardar este elemento?") },
+            title = { Text(if (isDetail) "¿Guardar la lista y la ficha?" else "¿Guardar este elemento?") },
             text = {
-                Text(
-                    (if (cap.texts.isEmpty()) "(sin textos)" else cap.texts.joinToString("\n")) +
-                        "\n\nFicha: " + ((fixedDetail ?: cap.detailUrl)?.let { shortUrl(it) } ?: "ninguna (se sustituirá sin abrir nada)") +
-                        "\n\nSe guarda el elemento (imagen y aspecto de su tarjeta), no la búsqueda. La imagen queda en el móvil.",
-                )
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(
+                        texts + if (isDetail) {
+                            "\n\nSe guarda la imagen principal de la ficha junto con el elemento de la lista. Al forzar, la web abrirá su ficha de forma natural y se sustituirá dentro."
+                        } else {
+                            "\n\nSe guarda el elemento (imagen y aspecto de su tarjeta), no la búsqueda. La imagen queda en el móvil. Después podrás capturar también su ficha."
+                        },
+                    )
+                    if (!isDetail) {
+                        TextButton(
+                            enabled = !saving,
+                            onClick = {
+                                saving = true
+                                scope.launch {
+                                    val data = dataOf(cap)
+                                    saving = false
+                                    pending = null
+                                    if (data == null) error = "No se pudo obtener la imagen. Elige otro elemento." else saveAll(cap, data, null)
+                                }
+                            },
+                        ) { Text("Guardar solo la lista (sin ficha)") }
+                    }
+                }
             },
             confirmButton = {
                 TextButton(
@@ -323,18 +353,19 @@ private fun CaptureScreen(site: Site, store: ForceStore, onDone: (saved: Boolean
                     onClick = {
                         saving = true
                         scope.launch {
-                            val data = cap.imageData ?: fetchImageDataUrl(cap.imageUrl, cap.pageUrl)
+                            val data = dataOf(cap)
                             saving = false
                             pending = null
-                            if (data == null) {
-                                error = "No se pudo obtener la imagen. Elige otro elemento."
-                            } else {
-                                store.save(site.id, ForcedItem(data, cap.texts, cap.html, fixedDetail ?: cap.detailUrl, cap.pageUrl, cap.aspect))
-                                onDone(true)
+                            when {
+                                data == null -> error = "No se pudo obtener la imagen. Elige otro elemento."
+                                first == null -> { listCap = cap; listData = data; armed = false } // paso 2: ahora la ficha (desarmado: hay que poder abrirla)
+                                // Sin instantánea HTML en la ficha: clonar el panel/página dejaría sin vida sus botones (cerrar, atrás…).
+                                // Se sustituyen la imagen y los textos sobre los elementos reales de la web.
+                                else -> saveAll(first, listData!!, DetailItem(data, cap.texts, null))
                             }
                         }
                     },
-                ) { Text(if (saving) "Guardando…" else "Guardar") }
+                ) { Text(if (saving) "Guardando…" else if (isDetail) "Guardar" else "Capturar su ficha") }
             },
             dismissButton = { TextButton(enabled = !saving, onClick = { pending = null }) { Text("Elegir otro") } },
         )
@@ -367,12 +398,9 @@ private fun EffectScreen(site: Site, item: ForcedItem, settings: SiteSettings, h
     var chrome by remember { mutableStateOf(settings.chrome) }
     var pageUrl by remember { mutableStateOf(site.startUrl) }
     var bottomVisible by remember { mutableStateOf(true) }
-    // Ficha del objeto: se abre al forzar, en una segunda capa por encima de la lista
-    var detailOpen by remember { mutableStateOf(false) }
-    var detailUrl by remember { mutableStateOf("") }
     val ios = isIosPlatform()
 
-    VolumeKeyEffect(enabled = !realWeb && !menu && !detailOpen) { activate() }
+    VolumeKeyEffect(enabled = !realWeb && !menu) { activate() }
 
     Box(Modifier.fillMaxSize()) {
     Column(Modifier.fillMaxSize().background(Color.Black)) {
@@ -391,7 +419,8 @@ private fun EffectScreen(site: Site, item: ForcedItem, settings: SiteSettings, h
                     idleMs = settings.idleMs,
                     auto = armedNow,
                     reportScroll = chrome && ios,
-                    detailUrl = item.detailUrl,
+                    detail = item.detail,
+                    session = navId,
                 ),
                 captureMode = false,
                 armed = false,
@@ -406,21 +435,12 @@ private fun EffectScreen(site: Site, item: ForcedItem, settings: SiteSettings, h
                 covered = menu,
                 onPageInfo = { url, _ -> if (url.isNotBlank()) pageUrl = url },
                 onScroll = { down -> bottomVisible = !down },
-                onForced = { url ->
-                    if (url.isNotBlank()) {
-                        detailUrl = url
-                        detailOpen = true
-                    }
-                },
             )
             // Zonas ocultas en Android (en iOS son vistas nativas dentro de la capa del navegador)
             HiddenCorner(Modifier.align(Alignment.BottomEnd), onTap = { activate() })
             if (!chrome) HiddenCorner(Modifier.align(Alignment.TopCenter), onLongPress = { menu = true }, width = 180.dp, height = 64.dp)
         }
         if (chrome && ios) BrowserBottomBar(visible = bottomVisible) else Box(Modifier.fillMaxWidth().navigationBarsPadding())
-    }
-    AnimatedVisibility(visible = detailOpen, enter = slideInHorizontally { it }, exit = slideOutHorizontally { it }) {
-        DetailLayer(url = detailUrl, ios = ios, chrome = chrome, desktop = settings.desktop, onClose = { detailOpen = false })
     }
     }
 
@@ -430,7 +450,7 @@ private fun EffectScreen(site: Site, item: ForcedItem, settings: SiteSettings, h
             title = { Text("Opciones ocultas") },
             text = {
                 Column {
-                    TextButton(onClick = { realWeb = false; armedNow = settings.auto; detailOpen = false; navId++; menu = false }) { Text("Reiniciar el efecto (recarga y vuelve al estado inicial)") }
+                    TextButton(onClick = { realWeb = false; armedNow = settings.auto; navId++; menu = false }) { Text("Reiniciar el efecto (recarga y vuelve al estado inicial)") }
                     TextButton(onClick = { realWeb = !realWeb; navId++; menu = false }) {
                         Text(if (realWeb) "Reanudar el forzaje" else "Mostrar la web real (sin forzar)")
                     }
@@ -473,38 +493,4 @@ private fun HiddenCorner(
             }
         },
     )
-}
-
-/**
- * Ficha del objeto: la página real del elemento forzado, en un navegador por ENCIMA de la lista (que queda intacta detrás, con el
- * elemento ya sustituido). Se cierra con «atrás» (botón del marco, tecla atrás de Android o arrastre desde el borde en iOS).
- */
-@Composable
-private fun DetailLayer(url: String, ios: Boolean, chrome: Boolean, desktop: Boolean, onClose: () -> Unit) {
-    var shown by remember { mutableStateOf(url) }
-    Column(
-        Modifier.fillMaxSize().background(Color.Black)
-            .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) {}, // no deja pasar toques a la lista
-    ) {
-        if (chrome) {
-            BrowserTopBar(ios = ios, url = shown, onMenu = {}, onBack = onClose)
-        } else {
-            Box(Modifier.fillMaxWidth().statusBarsPadding())
-        }
-        Box(Modifier.weight(1f).fillMaxWidth()) {
-            ForcerWebView(
-                url = url,
-                config = null,
-                captureMode = false,
-                armed = false,
-                onCapture = {},
-                onExit = onClose,
-                modifier = Modifier.fillMaxSize(),
-                desktop = desktop,
-                onPageInfo = { u, _ -> if (u.isNotBlank()) shown = u },
-                layer = 1,
-            )
-        }
-        if (chrome && ios) BrowserBottomBar(visible = true, onBack = onClose) else Box(Modifier.fillMaxWidth().navigationBarsPadding())
-    }
 }

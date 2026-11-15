@@ -1,8 +1,16 @@
 import { applyImage, applySnapshot, applySnapshotAt, applyTexts, applyTitleNear, FORCED_ATTR, normalizeImageUrl } from './apply';
 import { createCaptureMode } from './capture';
 import { findCandidate, isListItem, type Candidate } from './candidate';
+import { allMedia, cardKey, findCardByKey, findFichaMedia } from './ficha';
 import { createIdleDetector } from './idle';
 import { createTapTrigger } from './tap';
+
+/** Lo capturado en la FICHA del objeto (la página o el panel que abre la web al tocar un elemento de la lista). */
+export interface OmniDetail {
+  imageUrl: string;
+  texts?: string[];
+  html?: string;
+}
 
 export interface OmniConfig {
   imageUrl: string;
@@ -19,29 +27,84 @@ export interface OmniConfig {
    * 'auto' (heredado): al parar el scroll. 'manual': solo con OmniWeb.trigger().
    */
   mode?: 'tap' | 'auto' | 'manual';
-  /** Página de la ficha del objeto: al forzar se avisa a la app para que la abra en una segunda capa. */
-  detailUrl?: string;
+  /**
+   * Ficha capturada. Si hay, el toque NO se silencia: la web abre su ficha de forma natural; el motor sustituye la tarjeta de
+   * la lista (por detrás) y el medio principal de la ficha cuando aparece (también si es otra página: el estado se guarda).
+   */
+  detail?: OmniDetail;
   /** Modo 'tap': ¿empieza armado? Si no, hay que llamar a `OmniWeb.setArmed(true)` (activación secreta). */
   armed?: boolean;
+  /** Identifica una sesión del efecto: al cambiar (p. ej. «Reiniciar») se olvida lo ya forzado. */
+  session?: number;
+}
+
+/** Qué se pone en lugar de un elemento: la tarjeta de la lista o lo capturado en la ficha. */
+interface Content {
+  imageUrl: string;
+  texts?: string[];
+  html?: string;
+  title?: string;
 }
 
 interface Forced {
   media: Element;
   card: Element;
   isApplied: () => boolean;
+  content: Content;
   texts?: string[];
   textEls?: Node[];
   html?: string;
   observer: MutationObserver;
+  docObserver?: MutationObserver;
+  alive: boolean;
 }
+
+/** Estado que sobrevive a una navegación (sessionStorage): lo ya forzado no se repite al cargarse otra página. */
+interface State {
+  session: number | null;
+  key: string;
+  used: boolean;
+  listKey?: string;
+  fichaUntil?: number;
+  fichaDone?: boolean;
+}
+
+const STATE_KEY = 'omniweb.state';
+const LIST_DELAY_MS = 350; // la web procesa el toque antes de que sustituyamos la tarjeta por detrás
+const FICHA_WINDOW_MS = 10000; // tiempo máximo esperando a que aparezca la ficha
 
 function install(win: Window & typeof globalThis) {
   // El host puede inyectar el bundle varias veces (onPageStarted + onPageFinished): una sola instancia.
   if ((win as unknown as { OmniWeb?: unknown }).OmniWeb) return;
   const doc = win.document;
   let cfg: OmniConfig | null = null;
-  let forced: Forced | null = null;
+  let forced: Forced | null = null; // tarjeta de la lista
+  let fichaForced: Forced | null = null; // medio principal de la ficha
   let guard = false; // evita bucles con nuestro propio MutationObserver
+  // Modo 'tap': el truco se hace UNA vez. Aunque la web repinte la lista (y `forced` se pierda), la app reenvíe la
+  // configuración o se cargue otra página, no se vuelve a forzar en otra tarjeta; solo `reset()` o una configuración
+  // distinta (o otra sesión) lo rearman.
+  let st: State = { session: null, key: '', used: false };
+  let fichaTimer: number | undefined;
+  let restoreTimer: number | undefined;
+
+  const saveState = () => {
+    try {
+      win.sessionStorage.setItem(STATE_KEY, JSON.stringify(st));
+    } catch {
+      /* sin sessionStorage: solo vale dentro de este documento */
+    }
+  };
+  const loadState = (): State | null => {
+    try {
+      return JSON.parse(win.sessionStorage.getItem(STATE_KEY) || 'null');
+    } catch {
+      return null;
+    }
+  };
+
+  const listContent = (): Content => ({ imageUrl: cfg!.imageUrl, texts: cfg!.texts, html: cfg!.html, title: cfg!.title });
+  const fichaContent = (): Content => ({ imageUrl: cfg!.detail!.imageUrl, texts: cfg!.detail!.texts, html: cfg!.detail!.html });
 
   const idle = createIdleDetector(win, { idleMs: 450, onIdle: () => (cfg?.mode === 'auto' || cfg?.mode === undefined) && trigger() });
 
@@ -49,47 +112,61 @@ function install(win: Window & typeof globalThis) {
   const tap = createTapTrigger(win, {
     idleMs: 450,
     canTap: (x, y) => {
-      if (!cfg || cfg.mode !== 'tap' || forced) return false;
+      if (!cfg || cfg.mode !== 'tap' || forced || st.used) return false;
       const c = findCandidate(doc, x, y);
       return !!c && isListItem(c);
     },
+    passThrough: () => !!cfg?.detail,
     onTap: (x, y) => {
       const c = findCandidate(doc, x, y);
-      return !!c && forceAt(c);
+      if (!c) return false;
+      if (cfg?.detail) {
+        startFicha(c);
+        return true;
+      }
+      return forceAt(c);
     },
   });
 
-  function reapply() {
-    if (!forced || !cfg || guard) return;
-    if (forced.html && forced.card.isConnected && !forced.card.contains(forced.media)) {
+  function kill(f: Forced | null) {
+    if (!f) return;
+    f.alive = false;
+    f.observer.disconnect();
+    f.docObserver?.disconnect();
+    if (f === forced) forced = null;
+    if (f === fichaForced) fichaForced = null;
+  }
+
+  function reapply(f: Forced) {
+    if (!f.alive || !cfg || guard) return;
+    if (f.html && f.card.isConnected && !f.card.contains(f.media)) {
       // el framework repintó el interior de la tarjeta: volvemos a poner la instantánea
       guard = true;
-      const s = applySnapshotAt(forced.card, forced.html, cfg.imageUrl);
+      const s = applySnapshotAt(f.card, f.html, f.content.imageUrl);
       if (s) {
-        forced.media = s.main;
-        forced.isApplied = s.isApplied;
+        f.media = s.main;
+        f.isApplied = s.isApplied;
       }
       setTimeout(() => (guard = false), 0);
       return;
     }
-    if (!forced.media.isConnected) {
-      // el framework ha repintado: buscamos de nuevo el elemento más centrado
-      forced.observer.disconnect();
-      forced = null;
+    if (!f.media.isConnected) {
+      // el framework ha repintado (o se cerró la ficha)
+      kill(f);
       if (cfg.mode !== 'tap') trigger(); // en modo toque no se re-fuerza en otro sitio
       return;
     }
-    if (!forced.isApplied()) {
+    if (!f.isApplied()) {
       guard = true;
-      forced.isApplied = applyImage(forced.media, cfg.imageUrl);
+      f.isApplied = applyImage(f.media, f.content.imageUrl);
       setTimeout(() => (guard = false), 0);
     }
-    if (forced.texts && forced.textEls) {
-      const texts = forced.texts;
-      const stale = forced.textEls.some((el, i) => el.textContent !== texts[i]);
+    if (f.texts && f.textEls) {
+      const texts = f.texts;
+      const stale = f.textEls.some((el, i) => el.textContent !== texts[i]);
       if (stale) {
         guard = true;
-        forced.textEls.forEach((el, i) => (el.textContent = texts[i]));
+        f.textEls.forEach((el, i) => (el.textContent = texts[i]));
         setTimeout(() => (guard = false), 0);
       }
     }
@@ -106,60 +183,146 @@ function install(win: Window & typeof globalThis) {
     return forceAt(c);
   }
 
-  /** Sustituye la tarjeta `c` por la guardada (instantánea o imagen + textos). */
-  function forceAt(c: Candidate): boolean {
-    if (!cfg || forced) return false;
+  /** Sustituye `c` por `content` (instantánea o imagen + textos) y la vigila por si la web repinta. */
+  function substitute(c: Candidate, content: Content): Forced | null {
     guard = true;
-    // Avisar a la app (abre la ficha encima). Se hace al final de forceAt, tras sustituir la tarjeta.
-    const notify = () => (win as unknown as { OmniBridge?: { onForced?(u: string): void } }).OmniBridge?.onForced?.(cfg?.detailUrl ?? '');
-    if (cfg.html) {
-      const snap = applySnapshot(c.media, cfg.html, cfg.imageUrl);
+    const release = () => setTimeout(() => (guard = false), 0);
+    if (content.html) {
+      const snap = applySnapshot(c.media, content.html, content.imageUrl);
       if (snap) {
-        const observer = new MutationObserver(() => reapply());
-        observer.observe(snap.container, { attributes: true, childList: true, subtree: true, characterData: true });
-        forced = { media: snap.main, card: snap.container, isApplied: snap.isApplied, html: cfg.html, observer };
+        const f: Forced = {
+          media: snap.main,
+          card: snap.container,
+          isApplied: snap.isApplied,
+          html: content.html,
+          content,
+          alive: true,
+          observer: new MutationObserver(() => reapply(f)),
+        };
+        f.observer.observe(snap.container, { attributes: true, childList: true, subtree: true, characterData: true });
         console.log('[OmniWeb] forzado (instantánea)', snap.main.tagName, Math.round(snap.container.getBoundingClientRect().height) + 'px');
-        setTimeout(() => (guard = false), 0);
-        notify();
-        return true;
+        release();
+        return f;
       }
     }
-    const isApplied = applyImage(c.media, cfg.imageUrl);
+    const isApplied = applyImage(c.media, content.imageUrl);
     let root: Element = c.card;
     let texts: string[] | undefined;
     let textEls: Node[] | undefined;
-    if (cfg.texts?.length) {
-      const t = applyTexts(c.media, cfg.texts);
+    if (content.texts?.length) {
+      const t = applyTexts(c.media, content.texts);
       if (t) {
         root = t.container;
-        texts = cfg.texts;
+        texts = content.texts;
         textEls = t.targets;
       }
-    } else if (cfg.title) {
-      const t = applyTitleNear(c.media, cfg.title);
+    } else if (content.title) {
+      const t = applyTitleNear(c.media, content.title);
       if (t) {
         root = t.container;
-        texts = [cfg.title];
+        texts = [content.title];
         textEls = [t.target];
       }
     }
-    const observer = new MutationObserver(() => reapply());
-    observer.observe(root, { attributes: true, childList: true, subtree: true, characterData: true });
-    forced = { media: c.media, card: root, isApplied, texts, textEls, observer };
+    const f: Forced = { media: c.media, card: root, isApplied, content, texts, textEls, alive: true, observer: new MutationObserver(() => reapply(f)) };
+    f.observer.observe(root, { attributes: true, childList: true, subtree: true, characterData: true });
     console.log('[OmniWeb] forzado', c.media.tagName, (c.media as HTMLElement).className || '', 'en tarjeta', c.card.tagName, Math.round(c.card.getBoundingClientRect().height) + 'px');
-    setTimeout(() => (guard = false), 0);
+    release();
     // si el padre desaparece (re-render), observamos el documento para volver a colocar
-    new MutationObserver((_, self) => {
-      if (!forced) return self.disconnect();
-      if (!forced.media.isConnected) reapply();
-    }).observe(doc.body, { childList: true, subtree: true });
-    notify();
+    f.docObserver = new MutationObserver(() => {
+      if (f.alive && !f.media.isConnected) reapply(f);
+    });
+    f.docObserver.observe(doc.body, { childList: true, subtree: true });
+    return f;
+  }
+
+  /** Modo clásico (sin ficha): sustituye la tarjeta `c` de la lista y se silencia el toque. */
+  function forceAt(c: Candidate): boolean {
+    if (!cfg || forced || (st.used && cfg.mode === 'tap')) return false;
+    if (cfg.mode === 'tap') {
+      st.used = true;
+      st.listKey = cardKey(c.media);
+      saveState();
+    }
+    const f = substitute(c, listContent());
+    if (!f) return false;
+    forced = f;
     return true;
   }
 
+  /**
+   * Con ficha: el toque llega a la web (abre su ficha). Aquí se sustituye la tarjeta de la lista por detrás, un instante
+   * después, y se espera a que aparezca el medio principal de la ficha para sustituirlo también.
+   */
+  function startFicha(c: Candidate) {
+    if (!cfg || st.used) return;
+    st.used = true;
+    st.listKey = cardKey(c.media);
+    st.fichaDone = false;
+    st.fichaUntil = Date.now() + FICHA_WINDOW_MS;
+    saveState();
+    const before = new WeakSet(allMedia(doc));
+    win.setTimeout(() => {
+      if (cfg && !forced && c.media.isConnected) forced = substitute(c, listContent());
+    }, LIST_DELAY_MS);
+    watchFicha(before, st.fichaUntil);
+  }
+
+  /** Espera (hasta `until`) a que aparezca el medio principal de la ficha y lo sustituye. `before` = lo que había en la lista. */
+  function watchFicha(before: WeakSet<Element> | null, until: number) {
+    win.clearInterval(fichaTimer);
+    const href0 = win.location.href;
+    const t0 = Date.now();
+    let lastPick: Element | null = null;
+    fichaTimer = win.setInterval(() => {
+      if (!cfg?.detail || fichaForced || Date.now() > until) {
+        win.clearInterval(fichaTimer);
+        return;
+      }
+      if (doc.readyState === 'loading' || !doc.body) return;
+      // si la web reutiliza los elementos al abrir la ficha, tras un rato se admiten también los que ya existían
+      const allowOld = before !== null && win.location.href !== href0 && Date.now() - t0 > 1200;
+      const c = findFichaMedia(doc, { before, allowOld, skip: (m) => !!forced && forced.card.contains(m) });
+      if (!c) {
+        lastPick = null;
+        return;
+      }
+      if (c.media !== lastPick) {
+        lastPick = c.media; // debe mantenerse dos sondeos seguidos (la ficha termina de pintarse)
+        return;
+      }
+      win.clearInterval(fichaTimer);
+      fichaForced = substitute(c, fichaContent());
+      st.fichaDone = true;
+      saveState();
+    }, 150);
+  }
+
+  /** Tras una navegación (volver a la lista): vuelve a sustituir la tarjeta que se tocó, identificada por su enlace/imagen. */
+  function restoreList(key: string) {
+    win.clearInterval(restoreTimer);
+    let tries = 0;
+    restoreTimer = win.setInterval(() => {
+      if (!cfg || forced || ++tries > 25) {
+        win.clearInterval(restoreTimer);
+        return;
+      }
+      if (doc.readyState === 'loading' || !doc.body) return;
+      const c = findCardByKey(doc, key);
+      if (c) {
+        win.clearInterval(restoreTimer);
+        forced = substitute(c, listContent());
+      }
+    }, 200);
+  }
+
   function reset() {
-    forced?.observer.disconnect();
-    forced = null;
+    kill(forced);
+    kill(fichaForced);
+    win.clearInterval(fichaTimer);
+    win.clearInterval(restoreTimer);
+    st = { session: st.session, key: st.key, used: false };
+    saveState();
     doc.querySelectorAll(`[${FORCED_ATTR}]`).forEach((e) => e.removeAttribute(FORCED_ATTR));
     if (cfg?.mode !== 'tap') idle.arm();
   }
@@ -207,9 +370,33 @@ function install(win: Window & typeof globalThis) {
     },
     configure(c: OmniConfig) {
       cfg = { mode: 'auto', idleMs: 450, ...c, imageUrl: normalizeImageUrl(c.imageUrl) };
+      if (cfg.detail) cfg.detail = { ...cfg.detail, imageUrl: normalizeImageUrl(cfg.detail.imageUrl) };
       idle.setIdleMs(cfg.idleMs!);
       tap.setIdleMs(cfg.idleMs!);
+      const key = [
+        cfg.imageUrl.length + ':' + cfg.imageUrl.slice(-64),
+        cfg.html?.length ?? 0,
+        (cfg.texts ?? []).join('\u0001'),
+        cfg.title ?? '',
+        cfg.detail ? cfg.detail.imageUrl.length + ':' + cfg.detail.imageUrl.slice(-64) + ':' + (cfg.detail.html?.length ?? 0) : '',
+      ].join('|');
+      const session = cfg.session ?? null;
       forced = null;
+      fichaForced = null;
+      if (st.key !== key || st.session !== session) {
+        // primera configuración de este documento (o una distinta): ¿lo que se guardó antes vale para esta?
+        const prev = loadState();
+        if (prev && prev.key === key && prev.session === session) {
+          st = prev;
+          if (st.used && cfg.mode === 'tap') {
+            if (st.listKey) restoreList(st.listKey);
+            if (cfg.detail && !st.fichaDone && (st.fichaUntil ?? 0) > Date.now()) watchFicha(null, st.fichaUntil!);
+          }
+        } else {
+          st = { session, key, used: false };
+          saveState();
+        }
+      }
       if (cfg.mode === 'tap') {
         idle.disarm();
         tap.setArmed(cfg.armed !== false);
@@ -229,11 +416,13 @@ function install(win: Window & typeof globalThis) {
     reset,
     disarm() {
       cfg = null;
+      win.clearInterval(fichaTimer);
+      win.clearInterval(restoreTimer);
       idle.disarm();
       tap.setArmed(false);
     },
     get forced() {
-      return !!forced;
+      return !!forced || !!fichaForced;
     },
   };
   (win as unknown as { OmniWeb: typeof api }).OmniWeb = api;

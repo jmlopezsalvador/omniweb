@@ -16,8 +16,10 @@ data class ForceConfig(
     val auto: Boolean = true,
     /** El motor avisa de la dirección del scroll (la barra inferior decorativa se esconde al bajar). */
     val reportScroll: Boolean = false,
-    /** Ficha del objeto: el motor avisa a la app al forzar y la app la abre en una segunda capa. */
-    val detailUrl: String? = null,
+    /** Ficha capturada: si hay, el toque llega a la web (abre su ficha) y el motor sustituye dentro el medio principal. */
+    val detail: DetailItem? = null,
+    /** Sesión del efecto: al cambiar («Reiniciar») el motor olvida lo ya forzado, aunque la página no se recargue por completo. */
+    val session: Int = 0,
 )
 
 /**
@@ -88,5 +90,8 @@ internal fun ForceConfig.toJs(): String =
     "{imageUrl:${jsQuote(imageUrl)},texts:[${texts.joinToString(",") { jsQuote(it) }}]," +
         (if (html != null) "html:${jsQuote(html)}," else "") +
         (if (reportScroll) "reportScroll:true," else "") +
-        (if (!detailUrl.isNullOrBlank()) "detailUrl:${jsQuote(detailUrl)}," else "") +
-        "idleMs:$idleMs,mode:'tap',armed:$auto}"
+        (if (detail != null) {
+            "detail:{imageUrl:${jsQuote(detail.imageData)},texts:[${detail.texts.joinToString(",") { jsQuote(it) }}]" +
+                (if (detail.html != null) ",html:${jsQuote(detail.html)}" else "") + "},"
+        } else "") +
+        "session:$session,idleMs:$idleMs,mode:'tap',armed:$auto}"

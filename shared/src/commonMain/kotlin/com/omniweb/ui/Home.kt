@@ -291,8 +291,8 @@ private fun SettingsTab(store: ForceStore, version: Int, onChanged: () -> Unit, 
             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 Text("Cómo se usa", style = MaterialTheme.typography.titleMedium)
                 Text(
-                    """1. Preparar: busca en el sitio y toca el elemento a forzar.
-2. Efecto: se abre el inicio del sitio. Con el truco armado, quien desliza, para y pulsa un elemento de la lista lo ve sustituido y se abre su ficha.
+                    """1. Preparar: busca en el sitio y toca el elemento de la lista. Después entra en su ficha (como lo haría el espectador) y captura su imagen principal.
+2. Efecto: se abre el inicio del sitio. Con el truco armado, quien desliza, para y pulsa un elemento de la lista lo ve sustituido; la web abre su ficha con lo que capturaste.
 3. Gestos ocultos: pulsación larga en la barra de URL (menú) y botón de volumen o esquina inferior derecha (armar).""",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,

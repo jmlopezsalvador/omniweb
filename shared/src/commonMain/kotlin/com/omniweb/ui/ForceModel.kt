@@ -17,14 +17,25 @@ data class Capture(
     val aspect: Float,
 )
 
+/** Lo capturado en la FICHA del objeto (el panel o la página que abre la web al tocar un elemento de la lista). */
+data class DetailItem(
+    val imageData: String,
+    val texts: List<String>,
+    /** Instantánea HTML del contenedor del medio principal de la ficha (prioridad sobre `texts`). */
+    val html: String? = null,
+)
+
 /** Forzaje guardado de un sitio: un elemento ya existente en la web, con su imagen en local. */
 data class ForcedItem(
     val imageData: String,
     val texts: List<String>,
     /** Instantánea HTML de la tarjeta capturada; el efecto la reinserta tal cual (prioridad sobre `texts`). */
     val html: String? = null,
-    /** Ficha del objeto: al forzar se abre en una segunda capa por encima de la lista (RF-26/27). null = no se abre nada. */
-    val detailUrl: String? = null,
+    /**
+     * Ficha: lo capturado dentro de la ficha. Al forzar, la web abre SU ficha de forma natural y el motor sustituye en ella el
+     * medio principal por este. null = solo se sustituye la tarjeta de la lista y el toque no llega a la web.
+     */
+    val detail: DetailItem? = null,
     /** Página donde se capturó (informativa: el efecto abre el inicio del sitio). */
     val pageUrl: String,
     val aspect: Float,
@@ -154,8 +165,34 @@ class ForceStore(private val prefs: KeyValueStore, private val blobs: BlobStore)
         if (prefs.getLong("f.$siteId.n", 0L) <= 0L) return null
         return ForcedSummary(
             title = prefs.getString("f.$siteId.t0")?.takeIf { it.isNotBlank() } ?: "imagen",
-            hasDetail = !prefs.getString("f.$siteId.detail").isNullOrBlank(),
+            hasDetail = prefs.getBoolean("f.$siteId.d.has", false),
         )
+    }
+
+    private fun loadDetail(siteId: String): DetailItem? {
+        if (!prefs.getBoolean("f.$siteId.d.has", false)) return null
+        val image = blobs.read("f.$siteId.d.image")
+        if (image.isNullOrEmpty()) return null
+        val n = prefs.getLong("f.$siteId.d.n", 0L).toInt()
+        return DetailItem(
+            imageData = image,
+            texts = (0 until n).map { prefs.getString("f.$siteId.d.t$it") ?: "" },
+            html = blobs.read("f.$siteId.d.html")?.takeIf { it.isNotEmpty() },
+        )
+    }
+
+    private fun saveDetail(siteId: String, d: DetailItem?) {
+        if (d == null) {
+            prefs.putBoolean("f.$siteId.d.has", false)
+            blobs.delete("f.$siteId.d.image")
+            blobs.delete("f.$siteId.d.html")
+            return
+        }
+        blobs.write("f.$siteId.d.image", d.imageData)
+        if (d.html != null) blobs.write("f.$siteId.d.html", d.html) else blobs.delete("f.$siteId.d.html")
+        prefs.putLong("f.$siteId.d.n", d.texts.size.toLong())
+        d.texts.forEachIndexed { i, t -> prefs.putString("f.$siteId.d.t$i", t) }
+        prefs.putBoolean("f.$siteId.d.has", true)
     }
 
     fun load(siteId: String): ForcedItem? {
@@ -168,7 +205,7 @@ class ForceStore(private val prefs: KeyValueStore, private val blobs: BlobStore)
             imageData = image,
             texts = texts,
             html = (blobs.read("f.$siteId.html") ?: prefs.getString("f.$siteId.html"))?.takeIf { it.isNotEmpty() },
-            detailUrl = prefs.getString("f.$siteId.detail")?.takeIf { it.isNotBlank() },
+            detail = loadDetail(siteId),
             pageUrl = prefs.getString("f.$siteId.page") ?: "",
             aspect = prefs.getLong("f.$siteId.aspect", 1000L) / 1000f,
         )
@@ -182,13 +219,13 @@ class ForceStore(private val prefs: KeyValueStore, private val blobs: BlobStore)
         prefs.putLong("f.$siteId.n", item.texts.size.toLong())
         item.texts.forEachIndexed { i, t -> prefs.putString("f.$siteId.t$i", t) }
         prefs.putString("f.$siteId.page", item.pageUrl)
-        prefs.putString("f.$siteId.detail", item.detailUrl ?: "")
+        saveDetail(siteId, item.detail)
         prefs.putLong("f.$siteId.aspect", (item.aspect * 1000).toLong())
     }
 
     fun clear(siteId: String) {
         prefs.putLong("f.$siteId.n", 0L)
-        prefs.putString("f.$siteId.detail", "")
+        saveDetail(siteId, null)
         blobs.delete("f.$siteId.image")
         blobs.delete("f.$siteId.html")
         prefs.putString("f.$siteId.image", "")

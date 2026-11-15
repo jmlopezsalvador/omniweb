@@ -121,6 +121,36 @@ test('solo se fuerza una vez; después el toque es normal', async ({ page }) => 
   expect(await navigated(page)).toBe('7'); // el segundo toque llegó a la web
 });
 
+test('si la web repinta la lista tras forzar, otro toque NO vuelve a forzar', async ({ page }) => {
+  await open(page);
+  const p = await showCard(page, 5);
+  await page.waitForTimeout(600);
+  await page.mouse.click(p.x, p.y);
+  expect(await forcedCard(page)).toBe('5');
+  // Google repinta al abrir/cerrar la ficha: la tarjeta forzada desaparece del DOM y vuelve una «original»
+  await page.evaluate(() => document.querySelector('[data-omni-forced]')?.closest('.card')?.remove());
+  await page.waitForTimeout(100);
+  const q = await showCard(page, 7);
+  await page.waitForTimeout(600);
+  await page.mouse.click(q.x, q.y);
+  expect(await forcedCard(page)).toBeNull();
+  expect(await navigated(page)).toBe('7');
+});
+
+test('reenviar la misma configuración no rearma el truco', async ({ page }) => {
+  await open(page);
+  const p = await showCard(page, 5);
+  await page.waitForTimeout(600);
+  await page.mouse.click(p.x, p.y);
+  expect(await forcedCard(page)).toBe('5');
+  await page.evaluate((img) => (window as any).OmniWeb.configure({ imageUrl: img, texts: ['Predicción', 'Origen'], mode: 'tap', idleMs: 300 }), RED);
+  const q = await showCard(page, 7);
+  await page.waitForTimeout(600);
+  await page.mouse.click(q.x, q.y);
+  expect(await page.evaluate(() => document.querySelector('.card[data-n="7"] [data-omni-forced]'))).toBeNull();
+  expect(await navigated(page)).toBe('7');
+});
+
 test('el modo antiguo «auto» sigue funcionando (sustituye al parar)', async ({ page }) => {
   await open(page, { mode: 'auto' }, '');
   for (let i = 1; i <= 8; i++) {
@@ -130,30 +160,3 @@ test('el modo antiguo «auto» sigue funcionando (sustituye al parar)', async ({
   await expect.poll(() => forcedCard(page)).not.toBeNull();
 });
 
-test('al forzar se avisa a la app con la URL de la ficha, una sola vez', async ({ page }) => {
-  await page.addInitScript(() => {
-    (window as any).__forced = [];
-    (window as any).OmniBridge = { onCapture() {}, onForced: (u: string) => (window as any).__forced.push(u) };
-  });
-  await open(page, { detailUrl: 'https://example.com/ficha/5' });
-  const p = await showCard(page, 5);
-  await page.waitForTimeout(600);
-  await page.mouse.click(p.x, p.y);
-  expect(await page.evaluate(() => (window as any).__forced)).toEqual(['https://example.com/ficha/5']);
-  const q = await showCard(page, 7);
-  await page.waitForTimeout(600);
-  await page.mouse.click(q.x, q.y); // ya forzado: no vuelve a avisar
-  expect(await page.evaluate(() => (window as any).__forced)).toEqual(['https://example.com/ficha/5']);
-});
-
-test('sin URL de ficha se avisa con cadena vacía (la app no abre nada)', async ({ page }) => {
-  await page.addInitScript(() => {
-    (window as any).__forced = [];
-    (window as any).OmniBridge = { onCapture() {}, onForced: (u: string) => (window as any).__forced.push(u) };
-  });
-  await open(page);
-  const p = await showCard(page, 4);
-  await page.waitForTimeout(600);
-  await page.mouse.click(p.x, p.y);
-  expect(await page.evaluate(() => (window as any).__forced)).toEqual(['']);
-});

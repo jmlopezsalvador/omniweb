@@ -3,6 +3,7 @@ package com.omniweb
 import com.omniweb.ui.AMAZON
 import com.omniweb.ui.BUILT_IN_SITES
 import com.omniweb.ui.BlobStore
+import com.omniweb.ui.DetailItem
 import com.omniweb.ui.ForceStore
 import com.omniweb.ui.ForcedItem
 import com.omniweb.ui.GOOGLE_IMAGES
@@ -154,21 +155,37 @@ class ForceStoreTest {
         assertNull(st.load("s")!!.html) // el HTML anterior no sobrevive
     }
 
-    @Test fun detailUrlIsSavedLoadedAndSummarised() {
+    @Test fun detailIsSavedLoadedAndSummarised() {
         val st = store()
-        st.save("s", ForcedItem("data:a", listOf("Título"), null, "https://x.test/ficha/1", "p", 1f))
-        assertEquals("https://x.test/ficha/1", st.load("s")!!.detailUrl)
+        st.save("s", ForcedItem("data:a", listOf("Título"), null, DetailItem("data:d", listOf("Ficha", "Fuente\ncon salto"), "<div>f</div>"), "p", 1f))
+        val d = st.load("s")!!.detail!!
+        assertEquals("data:d", d.imageData)
+        assertEquals(listOf("Ficha", "Fuente\ncon salto"), d.texts)
+        assertEquals("<div>f</div>", d.html)
         assertTrue(st.summary("s")!!.hasDetail)
+        // sin ficha: se borra la anterior (no sobrevive de un guardado a otro)
         st.save("s", ForcedItem("data:a", listOf("Título"), null, null, "p", 1f))
-        assertNull(st.load("s")!!.detailUrl)
+        assertNull(st.load("s")!!.detail)
         assertFalse(st.summary("s")!!.hasDetail)
     }
 
-    @Test fun clearForgetsTheDetail() {
+    @Test fun detailWithoutHtmlIsLoadedWithoutIt() {
         val st = store()
-        st.save("s", ForcedItem("data:a", listOf("t"), null, "https://x.test/f", "p", 1f))
+        st.save("s", ForcedItem("data:a", listOf("t"), null, DetailItem("data:d", listOf("x"), "<b/>"), "p", 1f))
+        st.save("s", ForcedItem("data:a", listOf("t"), null, DetailItem("data:e", emptyList(), null), "p", 1f))
+        val d = st.load("s")!!.detail!!
+        assertEquals("data:e", d.imageData)
+        assertNull(d.html)
+        assertTrue(d.texts.isEmpty())
+    }
+
+    @Test fun clearForgetsTheDetail() {
+        val blobs = MemoryBlobs()
+        val st = store(blobs = blobs)
+        st.save("s", ForcedItem("data:a", listOf("t"), null, DetailItem("data:d", listOf("x"), "<i/>"), "p", 1f))
         st.clear("s")
         assertNull(st.summary("s"))
+        assertTrue(blobs.m.isEmpty())
     }
 
     @Test fun shortUrlTrims() {

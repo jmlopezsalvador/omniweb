@@ -7,9 +7,16 @@
 <style>body{margin:0;font-family:sans-serif;background:#0b2a4a;color:#fff;padding:24px}h1{font-size:28px}.big{font-size:80px;margin:40px 0}</style>
 </head>
 <body>
-<h1>FICHA DEL OBJETO</h1>
+<main id="m"><h1 id="dt">FICHA DEL OBJETO</h1>
+<img id="hero" alt="ficha" style="display:block;width:100%;height:300px;object-fit:cover">
 <div class="big" id="n">#</div>
-<p>Esta es la página real del elemento (segunda capa). Atrás vuelve a la lista.</p>
-<script>document.getElementById('n').textContent = '#' + (new URLSearchParams(location.search).get('n') || '?');</script>
+<p>Esta es la página real del elemento (ficha en otra página). Atrás vuelve a la lista.</p></main>
+<script>
+  var n = new URLSearchParams(location.search).get('n') || '?';
+  document.getElementById('n').textContent = '#' + n;
+  var hue = (((+n || 0) + 100) * 47) % 360;
+  var svg = '<svg xmlns="http://www.w3.org/2000/svg" width="400" height="220"><rect width="400" height="220" fill="hsl(' + hue + ',50%,40%)"/></svg>';
+  document.getElementById('hero').src = 'data:image/svg+xml;utf8,' + encodeURIComponent(svg);
+</script>
 </body>
 </html>

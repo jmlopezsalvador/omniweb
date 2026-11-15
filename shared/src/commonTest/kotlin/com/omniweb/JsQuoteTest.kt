@@ -1,5 +1,6 @@
 package com.omniweb
 
+import com.omniweb.ui.DetailItem
 import com.omniweb.ui.ForceConfig
 import com.omniweb.ui.jsQuote
 import com.omniweb.ui.toJs
@@ -27,19 +28,21 @@ class JsQuoteTest {
     @Test fun configLiteralIsWellFormed() {
         val js = ForceConfig("data:image/png;base64,AA", listOf("a\"b", "c"), "<p class=\"x\">hola</p>", 600, false).toJs()
         assertTrue(js.startsWith("{imageUrl:\"data:image/png;base64,AA\",texts:[\"a\\\"b\",\"c\"],html:"))
-        assertTrue(js.endsWith("idleMs:600,mode:'tap',armed:false}"))
+        assertTrue(js.endsWith("session:0,idleMs:600,mode:'tap',armed:false}"))
         assertFalse(js.contains("\n"))
     }
 
     @Test fun configWithoutHtmlOmitsTheField() {
         val js = ForceConfig("u", emptyList()).toJs()
-        assertEquals("{imageUrl:\"u\",texts:[],idleMs:450,mode:'tap',armed:true}", js)
+        assertEquals("{imageUrl:\"u\",texts:[],session:0,idleMs:450,mode:'tap',armed:true}", js)
     }
 
-    @Test fun detailUrlIsIncludedOnlyWhenPresent() {
-        assertTrue(ForceConfig("u", detailUrl = "https://x.test/f?a=1&b=\"2\"").toJs().contains("detailUrl:\"https://x.test/f?a=1&b=\\\"2\\\"\","))
-        assertFalse(ForceConfig("u").toJs().contains("detailUrl"))
-        assertFalse(ForceConfig("u", detailUrl = " ").toJs().contains("detailUrl"))
+    @Test fun detailIsIncludedOnlyWhenPresent() {
+        val js = ForceConfig("u", detail = DetailItem("data:d", listOf("a\"b"), "<p>x</p>"), session = 3).toJs()
+        assertTrue(js.contains("detail:{imageUrl:\"data:d\",texts:[\"a\\\"b\"],html:\"\\u003cp>x\\u003c/p>\"},"))
+        assertTrue(js.contains("session:3,"))
+        assertFalse(ForceConfig("u").toJs().contains("detail"))
+        assertFalse(ForceConfig("u", detail = DetailItem("d", emptyList(), null)).toJs().contains("html"))
     }
 
     @Test fun reportScrollIsOptIn() {

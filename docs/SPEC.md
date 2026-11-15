@@ -151,20 +151,20 @@ Sustituye a «sustituir al parar el scroll» (RF-04) y al disparo inmediato (RF-
   - *Deslizando*: llegan eventos de scroll con menos de `idleMs` entre ellos (300/450/600 ms, ya configurable).
   - *Reposo*: ha pasado `idleMs` desde el último scroll. **Un toque que llega mientras aún hay inercia no cuenta** (es el toque que frena la lista): se deja pasar y el siguiente toque ya puede disparar.
   - No hay caducidad del reposo; cualquier scroll nuevo vuelve a *Deslizando*. Un solo disparo por carga de página; después todo se comporta como una web normal.
-- **RF-26** Al disparar, en el **mismo toque** y por este orden: (1) se **cancela** la apertura real del elemento tocado; (2) **por detrás** se sustituye
-  la tarjeta tocada por la instantánea guardada (ya hecho); (3) se **abre la página del objeto** guardado (RF-27) con una transición como de navegación.
-- **RF-27** **Página del objeto** (la «ficha»: en Google Imágenes la vista del elemento con su texto e imágenes relacionadas; en YouTube el vídeo; en Amazon el producto).
-  Se muestra en una **segunda capa de navegador por encima** (con su marco y gesto/botón de cerrar), de modo que **la lista queda intacta detrás**. Al cerrarla,
-  el espectador vuelve a la lista y **el elemento sustituido está donde tocó**.
-- **RF-28** Si el elemento no tiene página de objeto guardada, se sustituye sin abrir nada (comportamiento actual) y se avisa al preparar.
+- **RF-26** *(redefinido tras probar con Google Imágenes)* Al disparar con una ficha capturada: (1) **el toque llega a la web**, que abre **su propia ficha** de forma natural
+  (panel de Google Imágenes, página de Amazon, vídeo de YouTube); (2) **por detrás** se sustituye la tarjeta tocada de la lista (un instante después, cuando la web ya procesó el toque);
+  (3) cuando aparece la ficha, el motor sustituye en ella su **medio principal** (y sus textos) por lo capturado en Preparar. Sin ficha capturada: el toque se silencia y solo se sustituye la lista (comportamiento anterior, RF-28).
+- **RF-27** **Ficha** = lo que la web muestra al abrir un elemento: se detecta como el **mayor medio visible nuevo** (que no estaba en la lista); si la ficha es otra página, el estado se conserva entre páginas (sessionStorage) y al volver a la lista la tarjeta sigue sustituida.
+  No se abre ninguna segunda capa ni se guarda URL: la ficha es siempre la nativa de la web. En la ficha se sustituyen imagen y textos sobre los elementos vivos (sin clonar HTML, para no matar sus botones).
+- **RF-28** Si no se capturó ficha, se sustituye solo la lista y no se abre nada.
+- **RF-38** **Una sola vez**: tras forzar, la web se comporta con normalidad aunque repinte la lista o se reenvíe la configuración; solo «Reiniciar» (o una configuración nueva) lo rearma.
 - **RF-35** **Solo elementos de una lista**: se ignoran logos, cabeceras y cualquier cosa que no sea una tarjeta repetida (p. ej. el logo de Google antes de buscar).
   Criterio genérico: la tarjeta tiene hermanas con la misma estructura (≥2) y un medio de tamaño mínimo. Si el toque no cae en una tarjeta válida, la web se comporta con normalidad.
 
 ### 10.3 Preparar: qué se guarda
-> **Estado 6c (Android hecho):** URL de la ficha automática + «Fijar ficha» manual; ficha en segunda capa con «atrás». iOS escrito, pendiente de probar.
-- **RF-29** Además de la imagen, textos y estructura de la tarjeta, se guarda la **URL de la página del objeto**. Orden de preferencia:
-  1) el `href` del enlace que envuelve la tarjeta (automático; vale en YouTube y Amazon); 2) paso opcional «ábrelo como lo haría el espectador y pulsa *Guardar esta página*»
-  (necesario donde la ficha es un panel dentro de la misma página, como en Google Imágenes).
+> **Estado:** Android hecho y probado en emulador (ficha nativa); iOS reutiliza el mismo motor y la misma lógica común (sin build todavía).
+- **RF-29** Preparar en **dos pasos**: (1) *Capturar elemento* de la lista (imagen, textos, instantánea de la tarjeta); (2) opcional, **entrar en su ficha** como lo haría el espectador y pulsar
+  *Capturar ficha* sobre su imagen principal (se guardan imagen y textos). «Sin ficha» guarda solo la lista. Ya no se guarda la URL de la ficha.
 - **RF-30** En el efecto el sitio abre su **inicio vacío** (ya hecho); la búsqueda la hace el mago o el espectador.
 
 ### 10.4 Activación secreta y demostración
@@ -190,13 +190,12 @@ Sustituye a «sustituir al parar el scroll» (RF-04) y al disparo inmediato (RF-
 ### 10.6 Orden de trabajo propuesto
 1. **6a** Aspecto de navegador (RF-20…23) y zona oculta arriba-centro (RF-32). Es independiente y se ve enseguida.
 2. **6b** Modelo de estados y toque (RF-24, 25, 35) con sustitución por detrás; tests Playwright de tiempos (inercia, doble toque, scroll nuevo).
-3. **6c** Página del objeto en segunda capa (RF-26, 27, 29): la parte más arriesgada.
+3. **6c** Ficha (RF-26, 27, 29): primero en segunda capa; **sustituida por la ficha nativa + forzar dentro** tras probar con Google Imágenes.
 4. **6d** Activación secreta y «armar con gesto» (RF-31).
 5. **6e** Barra inferior de la app, favoritos y favicons (RF-33, 34).
 
 ### 10.7 Riesgos a validar
-- **Ficha de Google Imágenes**: es un panel dentro de la misma página; su URL puede no abrirse sola en otra capa. Hay que probarlo con las tres webs antes de prometerlo (de ahí el paso opcional de RF-29).
+- **Ficha de Google Imágenes**: es un panel dentro de la misma página sin URL propia, por eso la ficha es la nativa de la web (RF-26). Pendiente validar la detección del medio principal en Google, YouTube y Amazon reales (en YouTube la ficha es un vídeo: solo se sustituye lo que sea imagen/póster).
 - **Webs que reaccionan a `pointerdown`/`touchend`** (YouTube): hay que interceptar toda la familia de eventos al disparar, como ya se hace en la captura.
-- **Segunda capa de navegador** en ambas plataformas (en iOS la capa nativa ya existe; en Android, un segundo `WebView` sobre el primero).
 - **Marco decorativo con barra inferior que se esconde**: necesita saber la dirección del scroll (nuevo mensaje del motor JS a la app).
 - iOS: sin botón de volumen fiable con el volumen al máximo/mínimo; la zona oculta es el gesto de referencia.

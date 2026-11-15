@@ -15,6 +15,11 @@ export interface TapTriggerOptions {
   canTap(x: number, y: number): boolean;
   /** Se llama UNA vez en el toque válido. Devuelve true si forzó algo. */
   onTap(x: number, y: number): boolean;
+  /**
+   * Si devuelve true (se consulta al apoyar el dedo), el toque NO se silencia: la web lo recibe y abre su ficha de forma
+   * natural, y `onTap` se llama igualmente (antes de que la web lo procese).
+   */
+  passThrough?(): boolean;
   now?: () => number;
 }
 
@@ -37,6 +42,7 @@ export function createTapTrigger(win: Window, opts: TapTriggerOptions): TapTrigg
   let down: { x: number; y: number; t: number } | null = null;
   let swallowUntil = 0;
   let swallowing = false;
+  let passing = false; // este toque se deja pasar a la web (ver `passThrough`)
 
   const doc = win.document;
 
@@ -70,6 +76,8 @@ export function createTapTrigger(win: Window, opts: TapTriggerOptions): TapTrigg
       const rest = now() - lastScrollAt >= idleMs;
       if (!rest || !opts.canTap(e.clientX, e.clientY)) return;
       down = { x: e.clientX, y: e.clientY, t: now() };
+      passing = !!opts.passThrough?.();
+      if (passing) return;
       swallowing = true;
       swallow(e); // este mismo pointerdown también se silencia
     },
@@ -109,8 +117,10 @@ export function createTapTrigger(win: Window, opts: TapTriggerOptions): TapTrigg
         return;
       }
       swallowing = false;
-      swallowUntil = now() + TAIL_MS; // pointerup, touchend, mouseup y click de ESTE toque
-      swallow(e);
+      if (!passing) {
+        swallowUntil = now() + TAIL_MS; // pointerup, touchend, mouseup y click de ESTE toque
+        swallow(e);
+      }
       opts.onTap(d.x, d.y);
     },
     true,
