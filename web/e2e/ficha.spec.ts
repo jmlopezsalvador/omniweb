@@ -127,3 +127,44 @@ test('sin ficha capturada el toque se silencia y solo se sustituye la lista (com
   expect(await forcedCard(page)).toBe('5');
   await expect(page.locator('#panel')).toHaveCount(0); // la web no vio el toque
 });
+
+test('panel que ya existe oculto y se reutiliza: también se sustituye la ficha', async ({ page }) => {
+  await open(page, '?panel=1&reuse=1');
+  const p = await showCard(page, 5);
+  await page.waitForTimeout(600);
+  await page.mouse.click(p.x, p.y);
+  await expect(page.locator('#panel')).toBeVisible();
+  await expect.poll(() => heroBlue(page)).toBe(true);
+  await expect(page.locator('#ptitle')).toHaveText('Ficha forzada');
+  await expect.poll(() => forcedCard(page)).toBe('5');
+});
+
+test('una capa transparente de la web sobre la imagen de la ficha no impide sustituirla', async ({ page }) => {
+  await open(page, '?panel=1&overlay=1');
+  const p = await showCard(page, 5);
+  await page.waitForTimeout(600);
+  await page.mouse.click(p.x, p.y);
+  await expect(page.locator('#panel')).toBeVisible();
+  await expect.poll(() => heroBlue(page)).toBe(true);
+});
+
+const forcedHref = (page: Page) =>
+  page.evaluate(() => document.querySelector('.card [data-omni-forced]')?.closest('.card')?.querySelector('a')?.getAttribute('href') ?? null);
+
+test('si la web recoloca la rejilla al apoyar el dedo, se sustituye la tarjeta TOCADA y no la que queda debajo al soltar', async ({ page }) => {
+  await open(page, '?panel=1&shift=1');
+  const p = await showCard(page, 5);
+  await page.waitForTimeout(600);
+  await page.mouse.click(p.x, p.y);
+  await expect.poll(() => forcedCard(page)).not.toBeNull();
+  expect(await forcedCard(page)).toBe('5');
+});
+
+test('si la web recicla la tarjeta al abrir la ficha, se sustituye la tarjeta tocada (por su identidad), no la que ocupa su sitio', async ({ page }) => {
+  await open(page, '?panel=1&recycle=1');
+  const p = await showCard(page, 5);
+  await page.waitForTimeout(600);
+  await page.mouse.click(p.x, p.y);
+  await expect.poll(() => forcedHref(page)).not.toBeNull();
+  expect(await forcedHref(page)).toBe('detail.html?n=5');
+});

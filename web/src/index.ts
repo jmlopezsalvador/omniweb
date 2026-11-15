@@ -1,7 +1,7 @@
 import { applyImage, applySnapshot, applySnapshotAt, applyTexts, applyTitleNear, FORCED_ATTR, normalizeImageUrl } from './apply';
 import { createCaptureMode } from './capture';
 import { findCandidate, isListItem, type Candidate } from './candidate';
-import { allMedia, cardKey, findCardByKey, findFichaMedia } from './ficha';
+import { cardId, cardKey, findCardByKey, findFichaMedia, sameCard, snapshotMedia } from './ficha';
 import { createShortcuts, type Shortcut } from './home';
 import { createIdleDetector } from './idle';
 import { createTapTrigger } from './tap';
@@ -112,17 +112,24 @@ function install(win: Window & typeof globalThis) {
   const shortcutRow = createShortcuts(win);
   const idle = createIdleDetector(win, { idleMs: 450, onIdle: () => (cfg?.mode === 'auto' || cfg?.mode === undefined) && trigger() });
 
+  // La tarjeta se decide al APOYAR el dedo: si la web reacciona antes de soltar (abre su ficha en pointerdown/touchstart, o
+  // recoloca la rejilla), lo que haya bajo el dedo al soltar ya no es la tarjeta que se tocó.
+  let pressed: { x: number; y: number; c: Candidate } | null = null;
+
   // Disparo por toque (modo 'tap')
   const tap = createTapTrigger(win, {
     idleMs: 450,
     canTap: (x, y) => {
       if (!cfg || cfg.mode !== 'tap' || forced || st.used) return false;
       const c = findCandidate(doc, x, y);
-      return !!c && isListItem(c);
+      pressed = c && isListItem(c) ? { x, y, c } : null;
+      return !!pressed;
     },
     passThrough: () => !!cfg?.detail,
     onTap: (x, y) => {
-      const c = findCandidate(doc, x, y);
+      const p = pressed;
+      pressed = null;
+      const c = p && p.x === x && p.y === y && p.c.media.isConnected ? p.c : findCandidate(doc, x, y);
       if (!c) return false;
       if (cfg?.detail) {
         startFicha(c);
@@ -156,8 +163,10 @@ function install(win: Window & typeof globalThis) {
     }
     if (!f.media.isConnected) {
       // el framework ha repintado (o se cerró la ficha)
+      const wasList = f === forced;
       kill(f);
       if (cfg.mode !== 'tap') trigger(); // en modo toque no se re-fuerza en otro sitio
+      else if (wasList && st.used && st.listKey) restoreList(st.listKey); // la MISMA tarjeta, localizada por su identidad
       return;
     }
     if (!f.isApplied()) {
@@ -265,15 +274,21 @@ function install(win: Window & typeof globalThis) {
     st.fichaDone = false;
     st.fichaUntil = Date.now() + FICHA_WINDOW_MS;
     saveState();
-    const before = new WeakSet(allMedia(doc));
+    const before = snapshotMedia(doc);
+    const key = st.listKey;
+    const id0 = cardId(c.media);
     win.setTimeout(() => {
-      if (cfg && !forced && c.media.isConnected) forced = substitute(c, listContent());
+      if (!cfg || forced) return;
+      // Si la web ha reciclado/repintado la rejilla al abrir la ficha, el elemento tocado puede haber pasado a ser OTRA tarjeta:
+      // solo se sustituye si sigue siendo la misma; si no, se busca por su identidad (o no se sustituye nada).
+      if (c.media.isConnected && sameCard(cardId(c.media), id0)) forced = substitute(c, listContent());
+      else if (key) restoreList(key);
     }, LIST_DELAY_MS);
     watchFicha(before, st.fichaUntil);
   }
 
   /** Espera (hasta `until`) a que aparezca el medio principal de la ficha y lo sustituye. `before` = lo que había en la lista. */
-  function watchFicha(before: WeakSet<Element> | null, until: number) {
+  function watchFicha(before: Map<Element, number> | null, until: number) {
     win.clearInterval(fichaTimer);
     const href0 = win.location.href;
     const t0 = Date.now();
