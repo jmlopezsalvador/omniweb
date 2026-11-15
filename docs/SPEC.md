@@ -34,6 +34,8 @@ Flujo de cada rutina:
 - RF-06 Borrar rastros, modo práctica y «mostrar la web real» desde el menú oculto (pulsación larga arriba-izquierda).
 - RF-07 Todo local, sin cuentas ni backend.
 
+> **Nota (2026-11-15, tras la prueba en iPhone):** RF-04, RF-05 y RF-15 quedan **redefinidos en el §10** (efecto = pausa + toque sobre un elemento de la lista, no sustitución al parar; la pantalla del efecto ya no es pantalla completa).
+
 ### Cambios y nuevos (a partir del uso real y de la investigación)
 - **RF-03b (corregido)** El efecto abre **la página de inicio del sitio** (`Site.startUrl`), no la página donde se capturó.
   `ForcedItem.pageUrl` deja de usarse para abrir el efecto.
@@ -118,3 +120,75 @@ hasta **9 imágenes**, detecta más de 40 idiomas; único rastro: la dirección 
 
 Fuentes: ficha de App Store de AnyWeb (id1491262721) y de Anyweb 2 (id1555576782); ficha de Inertia Pro (id1540387087);
 reseña de Ning Cai (2020); tiendas Magic Supply y Tricksupply. Otras tiendas dieron error 403/429 o piden login y no se leyeron.
+
+## 10. Efecto fiel y aspecto de navegador (decisiones del 2026-11-15)
+
+Estado de partida: en iPhone ya funciona (scroll y sustitución). Lo que se pide ahora es que **se parezca de verdad a un navegador** y que
+el efecto **ocurra como lo haría una pulsación real** y no antes.
+
+### 10.1 Aspecto de navegador (look & feel)
+- **RF-20** El efecto y Preparar **no van a pantalla completa**: se ve la **barra de estado del sistema** (hora, batería) y el contenido queda por debajo.
+  Se quita el modo inmersivo y el ocultar la barra de estado/indicador de inicio (iOS: `UIStatusBarHidden`, `.statusBarHidden(true)`, `persistentSystemOverlays`).
+- **RF-21** **Marco de navegador decorativo** en el efecto, con el estilo de cada sistema (Safari en iOS, Chrome en Android):
+  - **Barra superior** con la URL real de la página (solo el dominio, candado) y el título; no hace falta que funcione.
+  - **Barra inferior** que **aparece y desaparece al hacer scroll** (como Safari): atrás, adelante, compartir, favoritos, pestañas. Decorativa;
+    «atrás» puede funcionar de verdad.
+- **RF-22** **Activar/desactivar el marco** (por sitio y desde el menú oculto en directo). Con el marco apagado se ve solo la web bajo la barra de estado.
+- **RF-23** Respetar zonas seguras (notch/isla dinámica) y teclado; la web nunca debe quedar pegada al borde superior.
+
+### 10.2 Cómo ocurre el efecto (modelo de estados)
+Sustituye a «sustituir al parar el scroll» (RF-04) y al disparo inmediato (RF-05).
+
+```
+ DESARMADO ──(activación secreta)──▶ ARMADO ──(scroll)──▶ DESLIZANDO ──(sin scroll ≥ idleMs)──▶ REPOSO
+                 ▲                                              ▲                                    │
+                 └───────── (tras el disparo: vuelve a normal) ─┴──── (nuevo scroll vuelve a DESLIZANDO)
+                                                                                    toque válido ◀───┘ DISPARO
+```
+- **RF-24** El forzaje se dispara con un **toque** (tap corto, <10 px de movimiento y <300 ms) sobre un **elemento de la lista** estando en **REPOSO**:
+  el espectador desliza, **para**, y **pulsa** como si eligiera uno.
+- **RF-25** Condiciones de tiempo:
+  - *Deslizando*: llegan eventos de scroll con menos de `idleMs` entre ellos (300/450/600 ms, ya configurable).
+  - *Reposo*: ha pasado `idleMs` desde el último scroll. **Un toque que llega mientras aún hay inercia no cuenta** (es el toque que frena la lista): se deja pasar y el siguiente toque ya puede disparar.
+  - No hay caducidad del reposo; cualquier scroll nuevo vuelve a *Deslizando*. Un solo disparo por carga de página; después todo se comporta como una web normal.
+- **RF-26** Al disparar, en el **mismo toque** y por este orden: (1) se **cancela** la apertura real del elemento tocado; (2) **por detrás** se sustituye
+  la tarjeta tocada por la instantánea guardada (ya hecho); (3) se **abre la página del objeto** guardado (RF-27) con una transición como de navegación.
+- **RF-27** **Página del objeto** (la «ficha»: en Google Imágenes la vista del elemento con su texto e imágenes relacionadas; en YouTube el vídeo; en Amazon el producto).
+  Se muestra en una **segunda capa de navegador por encima** (con su marco y gesto/botón de cerrar), de modo que **la lista queda intacta detrás**. Al cerrarla,
+  el espectador vuelve a la lista y **el elemento sustituido está donde tocó**.
+- **RF-28** Si el elemento no tiene página de objeto guardada, se sustituye sin abrir nada (comportamiento actual) y se avisa al preparar.
+- **RF-35** **Solo elementos de una lista**: se ignoran logos, cabeceras y cualquier cosa que no sea una tarjeta repetida (p. ej. el logo de Google antes de buscar).
+  Criterio genérico: la tarjeta tiene hermanas con la misma estructura (≥2) y un medio de tamaño mínimo. Si el toque no cae en una tarjeta válida, la web se comporta con normalidad.
+
+### 10.3 Preparar: qué se guarda
+- **RF-29** Además de la imagen, textos y estructura de la tarjeta, se guarda la **URL de la página del objeto**. Orden de preferencia:
+  1) el `href` del enlace que envuelve la tarjeta (automático; vale en YouTube y Amazon); 2) paso opcional «ábrelo como lo haría el espectador y pulsa *Guardar esta página*»
+  (necesario donde la ficha es un panel dentro de la misma página, como en Google Imágenes).
+- **RF-30** En el efecto el sitio abre su **inicio vacío** (ya hecho); la búsqueda la hace el mago o el espectador.
+
+### 10.4 Activación secreta y demostración
+- **RF-31** Flujo de actuación: el mago puede **demostrar primero con la web real** (busca, desliza, abre un objeto, lo cierra) con el efecto **DESARMADO**, y **arma el truco en secreto**
+  después. Ajuste por sitio: «Armado desde el inicio» / «Armar con gesto». La **activación secreta** es: botón de volumen, toque en una zona oculta (abajo-derecha)
+  o pulsación en la zona del menú. El disparo inmediato anterior pasa a ser una opción avanzada.
+- **RF-32** **Zona oculta del menú**: **arriba en el centro**, grande (≈160×64 pt), y coincide con la **barra de URL decorativa**: una pulsación larga ahí abre el menú.
+  Con el marco apagado la zona sigue existiendo, invisible. Se retira la esquina superior izquierda.
+
+### 10.5 La app (fuera del efecto)
+- **RF-33** **Barra de navegación inferior** en la app, con pestañas. La primera, **Favoritos**, es como la página de inicio de un navegador: **cuadrícula de iconos** de los sitios con su logo.
+  Otras pestañas previstas: Rastros/Modo práctica, Ajustes generales, Ayuda.
+- **RF-34** Logos de los sitios: **no se incluyen logos de terceros en la app** (requisito §6 y marcas registradas). Se usará el **favicon que publica cada sitio** (lo que hace cualquier navegador), descargado en el
+  dispositivo desde el propio sitio y guardado en local; mientras tanto, inicial sobre color.
+
+### 10.6 Orden de trabajo propuesto
+1. **6a** Aspecto de navegador (RF-20…23) y zona oculta arriba-centro (RF-32). Es independiente y se ve enseguida.
+2. **6b** Modelo de estados y toque (RF-24, 25, 35) con sustitución por detrás; tests Playwright de tiempos (inercia, doble toque, scroll nuevo).
+3. **6c** Página del objeto en segunda capa (RF-26, 27, 29): la parte más arriesgada.
+4. **6d** Activación secreta y «armar con gesto» (RF-31).
+5. **6e** Barra inferior de la app, favoritos y favicons (RF-33, 34).
+
+### 10.7 Riesgos a validar
+- **Ficha de Google Imágenes**: es un panel dentro de la misma página; su URL puede no abrirse sola en otra capa. Hay que probarlo con las tres webs antes de prometerlo (de ahí el paso opcional de RF-29).
+- **Webs que reaccionan a `pointerdown`/`touchend`** (YouTube): hay que interceptar toda la familia de eventos al disparar, como ya se hace en la captura.
+- **Segunda capa de navegador** en ambas plataformas (en iOS la capa nativa ya existe; en Android, un segundo `WebView` sobre el primero).
+- **Marco decorativo con barra inferior que se esconde**: necesita saber la dirección del scroll (nuevo mensaje del motor JS a la app).
+- iOS: sin botón de volumen fiable con el volumen al máximo/mínimo; la zona oculta es el gesto de referencia.

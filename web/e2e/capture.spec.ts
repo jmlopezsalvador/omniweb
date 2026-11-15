@@ -122,3 +122,36 @@ test('efecto con instantánea: copia la tarjeta capturada (imagen y todos sus te
   expect(r.src).toBe('Fuente 4');
   expect(r.img).toContain('fill=');
 });
+
+test('reportScroll: avisa de la dirección del scroll a la app', async ({ page }) => {
+  await page.addInitScript(() => {
+    (window as any).__dirs = [];
+    (window as any).OmniBridge = { onCapture() {}, onScroll: (d: string) => (window as any).__dirs.push(d) };
+  });
+  await page.goto(PAGE);
+  await page.addScriptTag({ path: BUNDLE });
+  await page.evaluate(() => (window as any).OmniWeb.configure({ imageUrl: 'data:image/png;base64,AAAA', reportScroll: true, mode: 'manual' }));
+  for (let i = 1; i <= 6; i++) {
+    await page.evaluate((v) => window.scrollTo(0, v), i * 120);
+    await page.waitForTimeout(30);
+  }
+  for (let i = 5; i >= 1; i--) {
+    await page.evaluate((v) => window.scrollTo(0, v), i * 100);
+    await page.waitForTimeout(30);
+  }
+  const dirs = await page.evaluate(() => (window as any).__dirs);
+  expect(dirs).toEqual(['down', 'up']); // sin repetir mientras la dirección no cambia
+});
+
+test('sin reportScroll no se avisa', async ({ page }) => {
+  await page.addInitScript(() => {
+    (window as any).__dirs = [];
+    (window as any).OmniBridge = { onCapture() {}, onScroll: (d: string) => (window as any).__dirs.push(d) };
+  });
+  await page.goto(PAGE);
+  await page.addScriptTag({ path: BUNDLE });
+  await page.evaluate(() => (window as any).OmniWeb.configure({ imageUrl: 'data:image/png;base64,AAAA', mode: 'manual' }));
+  await page.evaluate(() => window.scrollTo(0, 600));
+  await page.waitForTimeout(100);
+  expect(await page.evaluate(() => (window as any).__dirs)).toEqual([]);
+});

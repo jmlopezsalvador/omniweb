@@ -11,6 +11,8 @@ export interface OmniConfig {
   /** Instantánea HTML de la tarjeta capturada; tiene prioridad sobre `texts`. */
   html?: string;
   idleMs?: number;
+  /** Avisar a la app de la dirección del scroll (barra inferior decorativa que se esconde al bajar). */
+  reportScroll?: boolean;
   /** 'auto': al parar el scroll. 'manual': solo con OmniWeb.trigger(). */
   mode?: 'auto' | 'manual';
 }
@@ -133,6 +135,34 @@ function install(win: Window & typeof globalThis) {
     const bridge = (win as unknown as { OmniBridge?: { onCapture(json: string): void } }).OmniBridge;
     bridge?.onCapture(JSON.stringify(c));
   });
+
+  // Dirección del scroll hacia la app. Solo con `reportScroll`; ignora el scroll de contenedores internos.
+  let lastY = win.scrollY;
+  let lastDir = '';
+  const emitDir = (dir: string) => {
+    if (dir === lastDir) return;
+    lastDir = dir;
+    (win as unknown as { OmniBridge?: { onScroll?(d: string): void } }).OmniBridge?.onScroll?.(dir);
+  };
+  win.addEventListener(
+    'scroll',
+    (e: Event) => {
+      if (!cfg?.reportScroll) return;
+      const t = e.target as Node | null;
+      if (t && t.nodeType === 1 && t !== doc.scrollingElement && t !== doc.documentElement && t !== doc.body) return;
+      const y = win.scrollY;
+      if (y < 40) {
+        lastY = y;
+        emitDir('up'); // arriba del todo: la barra inferior se muestra
+        return;
+      }
+      const d = y - lastY;
+      if (Math.abs(d) < 14) return;
+      lastY = y;
+      emitDir(d > 0 ? 'down' : 'up');
+    },
+    { passive: true, capture: true },
+  );
 
   const api = {
     startCapture() {

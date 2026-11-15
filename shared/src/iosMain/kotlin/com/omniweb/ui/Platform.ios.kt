@@ -9,7 +9,7 @@ import androidx.compose.runtime.rememberUpdatedState
 import kotlinx.cinterop.ExperimentalForeignApi
 import platform.Foundation.NSUserDefaults
 
-/** iOS: sin barras (SwiftUI las oculta en ContentView.swift); en el efecto Swift mantiene la pantalla encendida. */
+/** iOS: la barra de estado queda visible; en el efecto Swift mantiene la pantalla encendida. */
 @Composable
 actual fun SystemBarsEffect(immersive: Boolean) {
     val host = iosWebHost
@@ -66,3 +66,5 @@ class UserDefaultsStore : KeyValueStore {
     override fun putBoolean(key: String, value: Boolean) = d.setBool(value, key)
     override fun putLong(key: String, value: Long) = d.setInteger(value, key)
 }
+
+actual fun isIosPlatform(): Boolean = true

@@ -7,7 +7,7 @@ import androidx.compose.runtime.Composable
  * Todo lo demás va en común.
  */
 
-/** `immersive` = oculta las barras del sistema y mantiene la pantalla encendida (pantalla del efecto). */
+/** `immersive` = mantiene la pantalla encendida durante el efecto. Ya NO oculta las barras del sistema: se ve la hora y la batería como en un navegador. */
 @Composable
 expect fun SystemBarsEffect(immersive: Boolean)
 
@@ -17,3 +17,6 @@ expect fun VolumeKeyEffect(enabled: Boolean, onPress: () -> Unit)
 
 /** Borra cookies, almacenamiento web, caché e historial de navegación de todos los sitios. */
 expect fun clearBrowsingData()
+
+/** true en iOS: elige el estilo del marco de navegador (Safari con barra inferior) frente al de Android (Chrome). */
+expect fun isIosPlatform(): Boolean

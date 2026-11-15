@@ -54,6 +54,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
@@ -272,6 +273,7 @@ private fun SiteCard(
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 Pill(if (settings.auto) "Automático" else "Manual")
                 Pill(if (settings.desktop) "Escritorio" else "Móvil")
+                if (!settings.chrome) Pill("Sin marco")
                 Pill("${settings.idleMs} ms")
             }
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
@@ -349,6 +351,17 @@ private fun SiteSettingsDialog(
                         )
                     }
                     Switch(checked = s.desktop, onCheckedChange = { update(s.copy(desktop = it)) })
+                }
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text("Marco de navegador", style = MaterialTheme.typography.labelLarge)
+                        Text(
+                            "En el efecto añade la barra de URL (y la barra inferior en iPhone) para que parezca un navegador. Se puede cambiar en directo desde el menú oculto.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    Switch(checked = s.chrome, onCheckedChange = { update(s.copy(chrome = it)) })
                 }
                 if (hasItem) TextButton(onClick = onDeleteItem) { Text("Borrar forzaje guardado") }
                 if (isCustom) TextButton(onClick = onRemoveSite) { Text("Quitar este sitio") }
@@ -466,10 +479,12 @@ private fun CaptureScreen(site: Site, store: ForceStore, onDone: (saved: Boolean
 // ───────────────────────────── Efecto ─────────────────────────────
 
 /**
- * Pantalla del efecto: solo la web a pantalla completa, **abierta en el inicio del sitio** (sin la búsqueda con la que se
- * preparó): el mago o el espectador busca lo que quiera y el forzaje aparece al parar el scroll. Gestos ocultos:
- * - toque en la esquina INFERIOR DERECHA o botón de volumen: fuerza ahora (disparo manual);
- * - pulsación larga en la esquina SUPERIOR IZQUIERDA: menú oculto (reiniciar, web real, salir).
+ * Pantalla del efecto: la web **abierta en el inicio del sitio** (sin la búsqueda con la que se preparó) dentro de un marco que
+ * parece un navegador: barra de estado visible, barra de URL arriba y, en iPhone, barra inferior que se esconde al bajar.
+ * El marco es decorativo y se puede apagar. El mago o el espectador busca lo que quiera.
+ * Gestos ocultos:
+ * - pulsación larga en la **barra de URL** (o, sin marco, en la zona superior CENTRAL): menú oculto;
+ * - toque en la esquina INFERIOR DERECHA o botón de volumen: dispara a mano;
  * «Atrás» solo navega por la web; no sale del efecto.
  */
 @Composable
@@ -478,35 +493,49 @@ private fun EffectScreen(site: Site, item: ForcedItem, settings: SiteSettings, o
     var trigger by remember { mutableStateOf(0) }
     var realWeb by remember { mutableStateOf(false) }
     var menu by remember { mutableStateOf(false) }
+    var chrome by remember { mutableStateOf(settings.chrome) }
+    var pageUrl by remember { mutableStateOf(site.startUrl) }
+    var bottomVisible by remember { mutableStateOf(true) }
+    val ios = isIosPlatform()
 
     VolumeKeyEffect(enabled = !realWeb && !menu) { trigger++ }
 
-    Box(Modifier.fillMaxSize()) {
-        ForcerWebView(
-            url = site.startUrl,
-            config = if (realWeb) null else ForceConfig(
-                imageUrl = item.imageData,
-                texts = item.texts,
-                html = item.html,
-                idleMs = settings.idleMs,
-                auto = settings.auto,
-            ),
-            captureMode = false,
-            armed = false,
-            onCapture = {},
-            onExit = null,
-            modifier = Modifier.fillMaxSize(),
-            navId = navId,
-            desktop = settings.desktop,
-            triggerNonce = trigger,
-            onHiddenTap = { trigger++ },
-            onHiddenLongPress = { menu = true },
-            covered = menu,
-        )
-        // Esquina inferior derecha: disparo manual
-        HiddenCorner(Modifier.align(Alignment.BottomEnd), onTap = { trigger++ })
-        // Esquina superior izquierda: menú oculto
-        HiddenCorner(Modifier.align(Alignment.TopStart), onLongPress = { menu = true })
+    Column(Modifier.fillMaxSize().background(Color.Black)) {
+        if (chrome) {
+            BrowserTopBar(ios = ios, url = pageUrl, onMenu = { menu = true })
+        } else {
+            Box(Modifier.fillMaxWidth().statusBarsPadding()) // respeta la barra de estado aunque no haya marco
+        }
+        Box(Modifier.weight(1f).fillMaxWidth()) {
+            ForcerWebView(
+                url = site.startUrl,
+                config = if (realWeb) null else ForceConfig(
+                    imageUrl = item.imageData,
+                    texts = item.texts,
+                    html = item.html,
+                    idleMs = settings.idleMs,
+                    auto = settings.auto,
+                    reportScroll = chrome && ios,
+                ),
+                captureMode = false,
+                armed = false,
+                onCapture = {},
+                onExit = null,
+                modifier = Modifier.fillMaxSize(),
+                navId = navId,
+                desktop = settings.desktop,
+                triggerNonce = trigger,
+                onHiddenTap = { trigger++ },
+                onHiddenLongPress = { menu = true },
+                covered = menu,
+                onPageInfo = { url, _ -> if (url.isNotBlank()) pageUrl = url },
+                onScroll = { down -> bottomVisible = !down },
+            )
+            // Zonas ocultas en Android (en iOS son vistas nativas dentro de la capa del navegador)
+            HiddenCorner(Modifier.align(Alignment.BottomEnd), onTap = { trigger++ })
+            if (!chrome) HiddenCorner(Modifier.align(Alignment.TopCenter), onLongPress = { menu = true }, width = 180.dp, height = 64.dp)
+        }
+        if (chrome && ios) BrowserBottomBar(visible = bottomVisible) else Box(Modifier.fillMaxWidth().navigationBarsPadding())
     }
 
     if (menu) {
@@ -518,6 +547,9 @@ private fun EffectScreen(site: Site, item: ForcedItem, settings: SiteSettings, o
                     TextButton(onClick = { realWeb = false; navId++; menu = false }) { Text("Reiniciar el efecto (recarga y vuelve a armar)") }
                     TextButton(onClick = { realWeb = !realWeb; navId++; menu = false }) {
                         Text(if (realWeb) "Reanudar el forzaje" else "Mostrar la web real (sin forzar)")
+                    }
+                    TextButton(onClick = { chrome = !chrome; menu = false }) {
+                        Text(if (chrome) "Ocultar el marco de navegador" else "Mostrar el marco de navegador")
                     }
                     TextButton(onClick = { menu = false; onExit() }) { Text("Salir") }
                 }
@@ -532,9 +564,15 @@ private fun EffectScreen(site: Site, item: ForcedItem, settings: SiteSettings, o
  * `onTap`: toque corto. `onLongPress`: pulsación larga.
  */
 @Composable
-private fun HiddenCorner(modifier: Modifier, onTap: (() -> Unit)? = null, onLongPress: (() -> Unit)? = null) {
+private fun HiddenCorner(
+    modifier: Modifier,
+    onTap: (() -> Unit)? = null,
+    onLongPress: (() -> Unit)? = null,
+    width: Dp = 72.dp,
+    height: Dp = 72.dp,
+) {
     Box(
-        modifier.size(72.dp).pointerInput(onTap, onLongPress) {
+        modifier.size(width, height).pointerInput(onTap, onLongPress) {
             awaitEachGesture {
                 val down = awaitFirstDown()
                 down.consume()

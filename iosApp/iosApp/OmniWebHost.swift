@@ -23,7 +23,7 @@ private let downloadUserAgent =
 
 /// El motor llama a `window.OmniBridge.onCapture(json)` (así es en Android); aquí se reenvía al manejador nativo.
 private let bridgeShim = """
-window.OmniBridge = { onCapture: function (json) { window.webkit.messageHandlers.OmniBridge.postMessage(json); } };
+window.OmniBridge = { onCapture: function (json) { window.webkit.messageHandlers.OmniBridge.postMessage(json); }, onScroll: function (dir) { window.webkit.messageHandlers.OmniBridge.postMessage("scroll:" + dir); } };
 """
 
 /// Cargado una vez: el motor compilado, empaquetado como recurso (web/dist/omniweb.js, ver project.yml).
@@ -47,6 +47,7 @@ private final class WeakScriptHandler: NSObject, WKScriptMessageHandler {
 final class OmniWebView: WKWebView, WKNavigationDelegate, WKScriptMessageHandler {
     let callbacks: WebViewCallbacks
     let effectGestures: Bool
+    private var observations: [NSKeyValueObservation] = []
 
     init(desktop: Bool, effectGestures: Bool, callbacks: WebViewCallbacks) {
         self.callbacks = callbacks
@@ -66,6 +67,13 @@ final class OmniWebView: WKWebView, WKNavigationDelegate, WKScriptMessageHandler
         isOpaque = false
         backgroundColor = .black
         scrollView.backgroundColor = .black
+        // URL y título para la barra de URL decorativa
+        observations.append(observe(\.url, options: [.new]) { [weak self] _, _ in self?.reportPage() })
+        observations.append(observe(\.title, options: [.new]) { [weak self] _, _ in self?.reportPage() })
+    }
+
+    private func reportPage() {
+        callbacks.onPageInfo(url: url?.absoluteString ?? "", title: title ?? "")
     }
 
     required init?(coder: NSCoder) { fatalError("init(coder:) no se usa") }
@@ -83,6 +91,10 @@ final class OmniWebView: WKWebView, WKNavigationDelegate, WKScriptMessageHandler
     // MARK: WKScriptMessageHandler: captura entregada por el motor
 
     func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
+        if message.name == "OmniBridge", let text = message.body as? String, text.hasPrefix("scroll:") {
+            callbacks.onScroll(down: text == "scroll:down")
+            return
+        }
         guard message.name == "OmniBridge",
               let json = message.body as? String,
               let data = json.data(using: .utf8),
@@ -125,6 +137,8 @@ final class WebOverlayContainer: UIView {
     private let cornerTap = UIView()
     private let cornerMenu = UIView()
     private let cornerSize: CGFloat = 72
+    private let menuWidth: CGFloat = 180
+    private let menuHeight: CGFloat = 64
 
     override init(frame: CGRect) {
         super.init(frame: frame)
@@ -159,7 +173,8 @@ final class WebOverlayContainer: UIView {
         cornerTap.isHidden = !showCorners
         cornerMenu.isHidden = !showCorners
         cornerTap.frame = CGRect(x: target.maxX - cornerSize, y: target.maxY - cornerSize, width: cornerSize, height: cornerSize)
-        cornerMenu.frame = CGRect(x: target.minX, y: target.minY, width: cornerSize, height: cornerSize)
+        // Menú oculto: arriba en el CENTRO, ancho y alto para que sea fácil de acertar
+        cornerMenu.frame = CGRect(x: target.midX - menuWidth / 2, y: target.minY, width: menuWidth, height: menuHeight)
         bringSubviewToFront(cornerTap)
         bringSubviewToFront(cornerMenu)
     }

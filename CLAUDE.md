@@ -79,6 +79,7 @@ Si la app lleva una página de «Instrucciones» de cara al usuario final, mante
 - Probar en emulador: `adb install -r app/build/outputs/apk/debug/app-debug.apk`, abrir y hacer swipe; captura con `adb exec-out screencap -p`.
 
 ## Estado de fases
+- **Fase 6a hecha (aspecto de navegador)**: efecto sin pantalla completa (barra de estado visible), marco decorativo (`BrowserChrome.kt`: Safari con barra inferior que se esconde al bajar en iOS, Chrome en Android), zona oculta del menú arriba-centro (pulsación larga en la barra de URL; sin marco, zona invisible 180×64). Pendientes 6b-6e en `docs/SPEC.md` §10.
 - **Fase 4 (iOS) escrita, pendiente de verificar en el iPhone**: `WKWebView` en Swift + puente Kotlin (ver «iOS»). No se puede compilar en Windows: el primer build de Actions dirá si compila.
 - **Fase 5 (parte Android) hecha**: reset de datos y modo práctica, disparo manual oculto, bloqueo de apps externas, modo inmersivo, ajustes por sitio, gestión de sitios, imágenes en ficheros. Falta lo equivalente en iOS (Fase 4).
 - **Fase 3 en curso**: YouTube y Amazon probados (sitios predefinidos `YOUTUBE`, `AMAZON`; el modo genérico basta, ver lecciones). Pendiente: Netflix e Instagram (uno a uno; exigen login).
@@ -151,3 +152,9 @@ Si la app lleva una página de «Instrucciones» de cara al usuario final, mante
 - Inicio: tarjetas por sitio (avatar con inicial, estado «Preparado · «título»», pastillas Automático/Móvil/450 ms, botones Preparar/Efecto y menú ⋮ dibujado con Canvas). Colores explícitos para campos de texto: no usar `Color.Black` de fondo ni `Text` sin tema.
 - El efecto abre `Site.startUrl` (inicio del sitio, sin búsqueda); Amazon pasó de `/s?k=auriculares` a `https://www.amazon.es`. `ForcedItem.pageUrl` ya no se usa para abrir.
 - Android: la primera vez que se entra en inmersivo el sistema muestra «Viewing full screen / Got it» y se traga el primer gesto.
+
+## Marco de navegador (Fase 6a)
+- Decorativo: `BrowserTopBar` (candado + dominio vía `displayHost`; en Android, pestañas y ⋮) y `BrowserBottomBar` (solo iOS). La URL sale del `WebViewClient`/KVO (`onPageInfo`); la dirección del scroll, del motor JS (`config.reportScroll` → `OmniBridge.onScroll`).
+- `SiteSettings.chrome` (por sitio, por defecto activado) y conmutable en directo desde el menú oculto. Quitado el modo inmersivo: `SystemBarsEffect(immersive)` solo mantiene la pantalla encendida. iOS: `UIStatusBarHidden: false`, sin `.statusBarHidden(true)`.
+- iOS: zonas ocultas nativas en `WebOverlayContainer` (menú arriba-centro 180×64, disparo abajo-derecha 72×72). Android: `HiddenCorner` en Compose.
+- Orden de parámetros de `ForceConfig`: `reportScroll` va al FINAL (los tests usan argumentos posicionales).

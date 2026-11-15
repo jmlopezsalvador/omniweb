@@ -35,4 +35,9 @@ class JsQuoteTest {
         val js = ForceConfig("u", emptyList()).toJs()
         assertEquals("{imageUrl:\"u\",texts:[],idleMs:450,mode:'auto'}", js)
     }
+
+    @Test fun reportScrollIsOptIn() {
+        assertTrue(ForceConfig("u", reportScroll = true).toJs().contains("reportScroll:true,"))
+        assertFalse(ForceConfig("u").toJs().contains("reportScroll"))
+    }
 }

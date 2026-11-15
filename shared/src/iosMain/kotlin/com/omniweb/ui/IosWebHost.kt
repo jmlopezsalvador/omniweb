@@ -16,10 +16,16 @@ interface WebViewCallbacks {
     /** El motor JS entregó el elemento tocado en modo captura. */
     fun onCapture(imageUrl: String, imageData: String?, texts: List<String>, html: String?, pageUrl: String, aspect: Double)
 
+    /** URL y título actuales (barra de URL decorativa). */
+    fun onPageInfo(url: String, title: String)
+
+    /** Dirección del scroll (true = bajando), solo si la config lleva `reportScroll`. */
+    fun onScroll(down: Boolean)
+
     /** Esquina inferior derecha del efecto (disparo manual). Compose queda por debajo del navegador: lo gestiona Swift. */
     fun onHiddenTap()
 
-    /** Pulsación larga en la esquina superior izquierda del efecto (menú oculto). */
+    /** Pulsación larga en la zona superior CENTRAL del efecto (menú oculto). */
     fun onHiddenLongPress()
 }
 

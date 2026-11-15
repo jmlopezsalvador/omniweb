@@ -4,6 +4,7 @@ import android.annotation.SuppressLint
 import android.graphics.Bitmap
 import android.util.Base64
 import android.webkit.JavascriptInterface
+import android.webkit.WebChromeClient
 import android.webkit.WebResourceRequest
 import android.webkit.WebView
 import android.webkit.WebViewClient
@@ -52,9 +53,13 @@ actual fun ForcerWebView(
     onHiddenTap: (() -> Unit)?,
     onHiddenLongPress: (() -> Unit)?,
     covered: Boolean,
+    onPageInfo: ((String, String) -> Unit)?,
+    onScroll: ((Boolean) -> Unit)?,
 ) {
     val latestCapture by rememberUpdatedState(onCapture)
     val latestArmed by rememberUpdatedState(armed)
+    val latestInfo by rememberUpdatedState(onPageInfo)
+    val latestScroll by rememberUpdatedState(onScroll)
     var webView by remember { mutableStateOf<WebView?>(null) }
     var canGoBack by remember { mutableStateOf(false) }
 
@@ -97,7 +102,17 @@ actual fun ForcerWebView(
                         val c = runCatching { parseCapture(json) }.getOrNull() ?: return
                         post { latestCapture(c) }
                     }
+                    @JavascriptInterface
+                    fun onScroll(dir: String) {
+                        if (captureMode) return
+                        post { latestScroll?.invoke(dir == "down") }
+                    }
                 }, "OmniBridge")
+                webChromeClient = object : WebChromeClient() {
+                    override fun onReceivedTitle(view: WebView, title: String?) {
+                        latestInfo?.invoke(view.url ?: "", title ?: "")
+                    }
+                }
                 webViewClient = object : WebViewClient() {
                     // Esquemas que abrirían otra app (intent://, market://, youtube://…): se ignoran
                     override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean =
@@ -117,6 +132,7 @@ actual fun ForcerWebView(
                     }
                     override fun doUpdateVisitedHistory(view: WebView, u: String?, isReload: Boolean) {
                         canGoBack = view.canGoBack()
+                        latestInfo?.invoke(u ?: view.url ?: "", view.title ?: "")
                     }
                 }
                 loadUrl(url)

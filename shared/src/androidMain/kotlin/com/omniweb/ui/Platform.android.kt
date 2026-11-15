@@ -43,23 +43,13 @@ private fun Context.findActivity(): Activity? {
     return null
 }
 
+/** Android: solo mantiene la pantalla encendida durante el efecto. Las barras del sistema se quedan visibles. */
 @Composable
 actual fun SystemBarsEffect(immersive: Boolean) {
     val view = LocalView.current
     DisposableEffect(immersive) {
-        val window = view.context.findActivity()?.window
-        val controller = window?.let { WindowCompat.getInsetsController(it, view) }
-        if (immersive) {
-            controller?.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
-            controller?.hide(WindowInsetsCompat.Type.systemBars())
-            view.keepScreenOn = true
-        }
-        onDispose {
-            if (immersive) {
-                controller?.show(WindowInsetsCompat.Type.systemBars())
-                view.keepScreenOn = false
-            }
-        }
+        if (immersive) view.keepScreenOn = true
+        onDispose { if (immersive) view.keepScreenOn = false }
     }
 }
 
@@ -111,3 +101,5 @@ class FileBlobStore(context: Context) : BlobStore {
         file(name).delete()
     }
 }
+
+actual fun isIosPlatform(): Boolean = false

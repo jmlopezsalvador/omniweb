@@ -37,6 +37,8 @@ data class SiteSettings(
     val idleMs: Int = 450,
     /** Pide la web de escritorio (user agent de PC). */
     val desktop: Boolean = false,
+    /** Marco de navegador decorativo en el efecto (barra de URL y, en iOS, barra inferior). */
+    val chrome: Boolean = true,
 )
 
 val IDLE_OPTIONS = listOf(300, 450, 600)
@@ -112,12 +114,14 @@ class ForceStore(private val prefs: KeyValueStore, private val blobs: BlobStore)
         auto = prefs.getBoolean("s.$siteId.auto", true),
         idleMs = prefs.getLong("s.$siteId.idle", 450L).toInt(),
         desktop = prefs.getBoolean("s.$siteId.desktop", false),
+        chrome = prefs.getBoolean("s.$siteId.chrome", true),
     )
 
     fun saveSettings(siteId: String, s: SiteSettings) {
         prefs.putBoolean("s.$siteId.auto", s.auto)
         prefs.putLong("s.$siteId.idle", s.idleMs.toLong())
         prefs.putBoolean("s.$siteId.desktop", s.desktop)
+        prefs.putBoolean("s.$siteId.chrome", s.chrome)
     }
 
     /** Modo práctica: al salir del efecto se borran historial, cookies y caché. */

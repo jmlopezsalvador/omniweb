@@ -43,6 +43,8 @@ actual fun ForcerWebView(
     onHiddenTap: (() -> Unit)?,
     onHiddenLongPress: (() -> Unit)?,
     covered: Boolean,
+    onPageInfo: ((url: String, title: String) -> Unit)?,
+    onScroll: ((down: Boolean) -> Unit)?,
 ) {
     val host = iosWebHost
     if (host == null) {
@@ -54,6 +56,8 @@ actual fun ForcerWebView(
     val latestArmed by rememberUpdatedState(armed)
     val latestTap by rememberUpdatedState(onHiddenTap)
     val latestLong by rememberUpdatedState(onHiddenLongPress)
+    val latestInfo by rememberUpdatedState(onPageInfo)
+    val latestScroll by rememberUpdatedState(onScroll)
     val density = LocalDensity.current.density
     var view by remember { mutableStateOf<UIView?>(null) }
     var bounds by remember { mutableStateOf<Rect?>(null) }
@@ -71,6 +75,14 @@ actual fun ForcerWebView(
                 // Solo se atiende en la pantalla de preparación y con la captura armada
                 if (!captureMode || !latestArmed) return
                 latestCapture(Capture(imageUrl, imageData, texts, html, pageUrl, aspect.toFloat()))
+            }
+
+            override fun onPageInfo(url: String, title: String) {
+                latestInfo?.invoke(url, title)
+            }
+
+            override fun onScroll(down: Boolean) {
+                if (!captureMode) latestScroll?.invoke(down)
             }
 
             override fun onHiddenTap() {

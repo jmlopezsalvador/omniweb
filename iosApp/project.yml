@@ -18,7 +18,7 @@ targets:
         CFBundleDisplayName: OmniWeb
         UILaunchScreen: {}
         UIRequiresFullScreen: true
-        UIStatusBarHidden: true
+        UIStatusBarHidden: false
         UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait]
         UISupportedInterfaceOrientations~ipad: [UIInterfaceOrientationPortrait]
         CADisableMinimumFrameDurationOnPhone: true

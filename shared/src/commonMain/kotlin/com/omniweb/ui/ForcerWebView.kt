@@ -14,6 +14,8 @@ data class ForceConfig(
     val idleMs: Int = 450,
     /** true = automático al parar el scroll; false = solo manual (gesto oculto). */
     val auto: Boolean = true,
+    /** El motor avisa de la dirección del scroll (la barra inferior decorativa se esconde al bajar). */
+    val reportScroll: Boolean = false,
 )
 
 /**
@@ -46,6 +48,10 @@ expect fun ForcerWebView(
     onHiddenLongPress: (() -> Unit)? = null,
     /** Un diálogo de Compose está encima: en iOS el navegador es una capa nativa y se oculta para no taparlo. */
     covered: Boolean = false,
+    /** URL y título actuales de la página (para la barra de URL decorativa). */
+    onPageInfo: ((url: String, title: String) -> Unit)? = null,
+    /** Dirección del scroll: true = bajando. Solo si la config lleva `reportScroll`. */
+    onScroll: ((down: Boolean) -> Unit)? = null,
 )
 
 /** Descarga una imagen y la devuelve como data: URL (null si falla). Android: HttpURLConnection. */
@@ -75,4 +81,5 @@ internal fun jsQuote(s: String): String {
 internal fun ForceConfig.toJs(): String =
     "{imageUrl:${jsQuote(imageUrl)},texts:[${texts.joinToString(",") { jsQuote(it) }}]," +
         (if (html != null) "html:${jsQuote(html)}," else "") +
+        (if (reportScroll) "reportScroll:true," else "") +
         "idleMs:$idleMs,mode:'${if (auto) "auto" else "manual"}'}"
