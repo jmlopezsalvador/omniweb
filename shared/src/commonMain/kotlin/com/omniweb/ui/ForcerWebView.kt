@@ -100,7 +100,8 @@ internal fun ForceConfig.toJs(): String =
         (if (reportScroll) "reportScroll:true," else "") +
         (if (detail != null) {
             "detail:{imageUrl:${jsQuote(detail.imageData)},texts:[${detail.texts.joinToString(",") { jsQuote(it) }}]" +
-                (if (detail.html != null) ",html:${jsQuote(detail.html)}" else "") + "},"
+                (if (detail.html != null) ",html:${jsQuote(detail.html)}" else "") +
+                (if (detail.pageUrl != null) ",pageUrl:${jsQuote(detail.pageUrl)}" else "") + "},"
         } else "") +
         (if (shortcuts.isNotEmpty()) {
             "shortcuts:[${shortcuts.joinToString(",") { "{id:${jsQuote(it.id)},name:${jsQuote(it.name)}" + (if (it.icon != null) ",icon:${jsQuote(it.icon)}" else "") + "}" }}],"

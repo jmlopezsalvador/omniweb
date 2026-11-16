@@ -333,7 +333,11 @@ private fun CaptureScreen(site: Site, store: ForceStore, onDone: (saved: Boolean
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text(
                         texts + if (isDetail) {
-                            "\n\nSe guarda la imagen principal de la ficha junto con el elemento de la lista. Al forzar, la web abrirá su ficha de forma natural y se sustituirá dentro."
+                            if (detailPageUrl(first!!.pageUrl, cap.pageUrl) != null) {
+                                "\n\nLa ficha es una PÁGINA distinta: al forzar, el elemento de la lista abrirá directamente esa página real (con todo su texto), sin sustituir nada dentro."
+                            } else {
+                                "\n\nSe guarda la imagen principal de la ficha junto con el elemento de la lista. Al forzar, la web abrirá su ficha de forma natural y se sustituirá dentro."
+                            }
                         } else {
                             "\n\nSe guarda el elemento (imagen y aspecto de su tarjeta), no la búsqueda. La imagen queda en el móvil. Después podrás capturar también su ficha."
                         },
@@ -368,7 +372,7 @@ private fun CaptureScreen(site: Site, store: ForceStore, onDone: (saved: Boolean
                                 first == null -> { listCap = cap; listData = data; armed = false } // paso 2: ahora la ficha (desarmado: hay que poder abrirla)
                                 // Sin instantánea HTML en la ficha: clonar el panel/página dejaría sin vida sus botones (cerrar, atrás…).
                                 // Se sustituyen la imagen y los textos sobre los elementos reales de la web.
-                                else -> saveAll(first, listData!!, DetailItem(data, cap.texts, null))
+                                else -> saveAll(first, listData!!, DetailItem(data, cap.texts, null, detailPageUrl(first.pageUrl, cap.pageUrl)))
                             }
                         }
                     },

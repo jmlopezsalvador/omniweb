@@ -23,7 +23,26 @@ data class DetailItem(
     val texts: List<String>,
     /** Instantánea HTML del contenedor del medio principal de la ficha (prioridad sobre `texts`). */
     val html: String? = null,
+    /**
+     * La ficha es OTRA página (Amazon, YouTube…): su dirección. Entonces no se sustituye nada dentro de la ficha: la tarjeta de la
+     * lista abre directamente esta página real. null = la ficha es un panel de la misma página (Google Imágenes): se sustituye dentro.
+     */
+    val pageUrl: String? = null,
 )
+
+/**
+ * Si la ficha capturada está en OTRA página distinta de la lista (otro host o otra ruta), devuelve su dirección sin `#`; si es
+ * un panel de la misma página (misma ruta), null. Solo http(s).
+ */
+fun detailPageUrl(listPage: String, detailPage: String): String? {
+    fun split(u: String): Pair<String, String>? {
+        val m = Regex("^(https?)://([^/?#]+)([^?#]*)").find(u.trim()) ?: return null
+        return m.groupValues[2].lowercase() to m.groupValues[3].ifEmpty { "/" }
+    }
+    val a = split(listPage) ?: return null
+    val b = split(detailPage) ?: return null
+    return if (a == b) null else detailPage.trim().substringBefore('#')
+}
 
 /** Forzaje guardado de un sitio: un elemento ya existente en la web, con su imagen en local. */
 data class ForcedItem(
@@ -182,6 +201,7 @@ class ForceStore(private val prefs: KeyValueStore, private val blobs: BlobStore)
             imageData = image,
             texts = (0 until n).map { prefs.getString("f.$siteId.d.t$it") ?: "" },
             html = blobs.read("f.$siteId.d.html")?.takeIf { it.isNotEmpty() },
+            pageUrl = prefs.getString("f.$siteId.d.page")?.takeIf { it.isNotBlank() },
         )
     }
 
@@ -194,6 +214,7 @@ class ForceStore(private val prefs: KeyValueStore, private val blobs: BlobStore)
         }
         blobs.write("f.$siteId.d.image", d.imageData)
         if (d.html != null) blobs.write("f.$siteId.d.html", d.html) else blobs.delete("f.$siteId.d.html")
+        prefs.putString("f.$siteId.d.page", d.pageUrl ?: "")
         prefs.putLong("f.$siteId.d.n", d.texts.size.toLong())
         d.texts.forEachIndexed { i, t -> prefs.putString("f.$siteId.d.t$i", t) }
         prefs.putBoolean("f.$siteId.d.has", true)

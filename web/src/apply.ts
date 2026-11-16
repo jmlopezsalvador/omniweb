@@ -275,6 +275,20 @@ export function applySnapshot(media: Element, html: string, imageUrl: string): {
   return s ? { container: r.container, ...s } : null;
 }
 
+/**
+ * «Ficha = página»: todos los enlaces de la tarjeta (y el que la envuelve, si lo hay) apuntan a `href`. Así la tarjeta sustituida
+ * abre DE VERDAD la página del elemento forzado y no hay que sustituir nada dentro de ella.
+ */
+export function retargetLinks(container: Element, href: string) {
+  const set = (a: Element) => {
+    if (a.getAttribute('href') !== href) a.setAttribute('href', href);
+    a.removeAttribute('target');
+  };
+  container.querySelectorAll('a[href]').forEach(set);
+  const outer = container.closest('a[href]');
+  if (outer) set(outer);
+}
+
 export const OVERLAY_ATTR = 'data-omni-overlay';
 
 /** Los hijos originales de la tarjeta se quedan en su sitio pero transparentes: siguen recibiendo el toque. */

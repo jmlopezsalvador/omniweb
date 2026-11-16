@@ -11,6 +11,7 @@ import com.omniweb.ui.HOME_GOOGLE
 import com.omniweb.ui.HOME_GRID
 import com.omniweb.ui.KeyValueStore
 import com.omniweb.ui.SiteSettings
+import com.omniweb.ui.detailPageUrl
 import com.omniweb.ui.isExternalScheme
 import com.omniweb.ui.normalizeUrl
 import kotlin.test.Test
@@ -247,5 +248,18 @@ class ForceStoreTest {
         assertFalse(isExternalScheme("data:image/png;base64,AAAA"))
         assertFalse(isExternalScheme("file:///android_asset/test/page.html"))
         assertFalse(isExternalScheme("sin-esquema"))
+    }
+
+    @Test fun detailPageUrlIsSavedAndDetected() {
+        val st = store()
+        st.save("s", ForcedItem("data:a", listOf("t"), null, DetailItem("data:d", emptyList(), null, "https://www.amazon.es/dp/B0X"), "p", 1f))
+        assertEquals("https://www.amazon.es/dp/B0X", st.load("s")!!.detail!!.pageUrl)
+        st.save("s", ForcedItem("data:a", listOf("t"), null, DetailItem("data:d", emptyList(), null), "p", 1f))
+        assertNull(st.load("s")!!.detail!!.pageUrl)
+        // la ficha es otra página (otra ruta o host): su dirección sin #; un panel de la misma ruta: null
+        assertEquals("https://www.amazon.es/dp/B0X?th=1", detailPageUrl("https://www.amazon.es/s?k=a", "https://www.amazon.es/dp/B0X?th=1#x"))
+        assertEquals("https://m.youtube.com/watch?v=1", detailPageUrl("https://m.youtube.com/results?q=a", "https://m.youtube.com/watch?v=1"))
+        assertNull(detailPageUrl("https://www.google.com/search?q=a&tbm=isch", "https://www.google.com/search?q=a&tbm=isch&imgrc=1#fragment"))
+        assertNull(detailPageUrl("file:///android_asset/test/page.html", "file:///android_asset/test/detail.html"))
     }
 }

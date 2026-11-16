@@ -11,6 +11,7 @@ import {
   normalizeImageUrl,
   overlayStale,
   reHideOriginals,
+  retargetLinks,
 } from './apply';
 import { createCaptureMode } from './capture';
 import { findCandidate, isListItem, type Candidate } from './candidate';
@@ -24,6 +25,11 @@ export interface OmniDetail {
   imageUrl: string;
   texts?: string[];
   html?: string;
+  /**
+   * La ficha es OTRA página (Amazon, YouTube…): su dirección. Con ella no se sustituye nada dentro de la ficha: la tarjeta de la
+   * lista se cambia por la capturada (con sus enlaces apuntando aquí) y el toque lleva directamente a la página real.
+   */
+  pageUrl?: string;
 }
 
 export interface OmniConfig {
@@ -75,6 +81,8 @@ interface Forced {
   alive: boolean;
   /** La instantánea va SOBREPUESTA a la tarjeta original (que sigue viva y transparente): ver `applySnapshotOverlayAt`. */
   overlay?: boolean;
+  /** «Ficha = página»: los enlaces de la tarjeta apuntan aquí. */
+  link?: string;
 }
 
 /** Estado que sobrevive a una navegación (sessionStorage): lo ya forzado no se repite al cargarse otra página. */
@@ -114,6 +122,8 @@ function install(win: Window & typeof globalThis) {
   let configured = false; // ya se configuró en este documento
   let fichaTimer: number | undefined;
   let restoreTimer: number | undefined;
+  let restoreObs: MutationObserver | undefined;
+  let listTok = 0; // invalida la sustitución diferida de la lista si entretanto se reinicia o reconfigura
 
   const saveState = () => {
     try {
@@ -131,6 +141,17 @@ function install(win: Window & typeof globalThis) {
   };
 
   const listContent = (): Content => ({ imageUrl: cfg!.imageUrl, texts: cfg!.texts, html: cfg!.html, title: cfg!.title });
+  /** «Ficha = página»: la ficha real de lo forzado se abre por navegación, sin sustituir nada dentro. */
+  /** ¿Estamos en la página de la lista (donde se tocó), no en la ficha que es otra página? Ahí no hay nada que restaurar. */
+  const onListPage = () => {
+    if (!st.fromHref) return true;
+    try {
+      return new URL(st.fromHref).pathname === win.location.pathname;
+    } catch {
+      return true;
+    }
+  };
+  const pageMode = () => !!cfg?.detail?.pageUrl;
   const fichaContent = (): Content => ({ imageUrl: cfg!.detail!.imageUrl, texts: cfg!.detail!.texts, html: cfg!.detail!.html });
 
   const shortcutRow = createShortcuts(win);
@@ -149,12 +170,13 @@ function install(win: Window & typeof globalThis) {
       pressed = c && isListItem(c) ? { x, y, c } : null;
       return !!pressed;
     },
-    passThrough: () => !!cfg?.detail,
+    passThrough: () => !!cfg?.detail && !pageMode(),
     onTap: (x, y) => {
       const p = pressed;
       pressed = null;
       const c = p && p.x === x && p.y === y && p.c.media.isConnected ? p.c : findCandidate(doc, x, y);
       if (!c) return false;
+      if (pageMode()) return startPage(c);
       if (cfg?.detail) {
         startFicha(c);
         return true;
@@ -200,6 +222,7 @@ function install(win: Window & typeof globalThis) {
       if (s) {
         f.media = s.main;
         f.isApplied = s.isApplied;
+        if (f.link) retargetLinks(f.card, f.link);
       }
       setTimeout(() => (guard = false), 0);
       return;
@@ -240,7 +263,7 @@ function install(win: Window & typeof globalThis) {
   }
 
   /** Sustituye `c` por `content` (instantánea o imagen + textos) y la vigila por si la web repinta. */
-  function substitute(c: Candidate, content: Content, overlay = false): Forced | null {
+  function substitute(c: Candidate, content: Content, overlay = false, link?: string): Forced | null {
     guard = true;
     const release = () => setTimeout(() => (guard = false), 0);
     if (content.html) {
@@ -253,9 +276,11 @@ function install(win: Window & typeof globalThis) {
           html: content.html,
           content,
           overlay,
+          link,
           alive: true,
           observer: new MutationObserver(() => reapply(f)),
         };
+        if (link) retargetLinks(snap.container, link);
         f.observer.observe(snap.container, { attributes: true, childList: true, subtree: true, characterData: true });
         console.log('[OmniWeb] forzado (instantánea)', snap.main.tagName, Math.round(snap.container.getBoundingClientRect().height) + 'px');
         release();
@@ -281,7 +306,8 @@ function install(win: Window & typeof globalThis) {
         textEls = [t.target];
       }
     }
-    const f: Forced = { media: c.media, card: root, isApplied, content, texts, textEls, alive: true, observer: new MutationObserver(() => reapply(f)) };
+    const f: Forced = { media: c.media, card: root, isApplied, content, texts, textEls, link, alive: true, observer: new MutationObserver(() => reapply(f)) };
+    if (link) retargetLinks(root, link);
     f.observer.observe(root, { attributes: true, childList: true, subtree: true, characterData: true });
     console.log('[OmniWeb] forzado', c.media.tagName, (c.media as HTMLElement).className || '', 'en tarjeta', c.card.tagName, Math.round(c.card.getBoundingClientRect().height) + 'px');
     release();
@@ -308,6 +334,24 @@ function install(win: Window & typeof globalThis) {
   }
 
   /**
+   * «Ficha = página»: el toque NO llega a la web. Se cambia la tarjeta tocada por la capturada (con sus enlaces apuntando a la
+   * página real del elemento forzado) y se navega allí: la web muestra su propia ficha, con todo su texto, sin parches.
+   * Al volver, `restoreList` vuelve a poner la tarjeta forzada en cuanto aparece.
+   */
+  function startPage(c: Candidate): boolean {
+    if (!cfg?.detail?.pageUrl || st.used) return false;
+    const url = cfg.detail.pageUrl;
+    st.used = true;
+    st.listKey = cardKey(c.media);
+    st.fichaDone = true;
+    st.fromHref = stripHash(win.location.href);
+    saveState();
+    forced = substitute(c, listContent(), false, url);
+    win.setTimeout(() => win.location.assign(url), 0);
+    return true;
+  }
+
+  /**
    * Con ficha: el toque llega a la web (abre su ficha). Aquí se sustituye la tarjeta de la lista por detrás, un instante
    * después, y se espera a que aparezca el medio principal de la ficha para sustituirlo también.
    */
@@ -322,8 +366,9 @@ function install(win: Window & typeof globalThis) {
     const before = snapshotMedia(doc);
     const key = st.listKey;
     const id0 = cardId(c.media);
+    const tok = ++listTok;
     win.setTimeout(() => {
-      if (!cfg || forced) return;
+      if (!cfg || forced || tok !== listTok) return;
       // Si la web ha reciclado/repintado la rejilla al abrir la ficha, el elemento tocado puede haber pasado a ser OTRA tarjeta:
       // solo se sustituye si sigue siendo la misma; si no, se busca por su identidad (o no se sustituye nada).
       if (c.media.isConnected && sameCard(cardId(c.media), id0)) forced = substitute(c, listContent(), true);
@@ -363,7 +408,7 @@ function install(win: Window & typeof globalThis) {
       st.fichaDone = true;
       saveState();
       holdFicha(rect, before);
-    }, 150);
+    }, 50);
   }
 
   /** Suelta lo forzado en la ficha (se cerró): si la web reutiliza esos elementos para otra ficha, no se vuelve a forzar. */
@@ -429,7 +474,7 @@ function install(win: Window & typeof globalThis) {
     (e: PointerEvent) => {
       const d = reDown;
       reDown = null;
-      if (!d || !cfg?.detail || !st.used || !forced || fichaForced) return;
+      if (!d || !cfg?.detail || pageMode() || !st.used || !forced || fichaForced) return;
       if (performance.now() - d.t > 300 || Math.hypot(e.clientX - d.x, e.clientY - d.y) > 10) return;
       const t = e.target as Node | null;
       if (!t || !forced.card.contains(t)) return;
@@ -441,29 +486,52 @@ function install(win: Window & typeof globalThis) {
     true,
   );
 
-  /** Tras una navegación (volver a la lista): vuelve a sustituir la tarjeta que se tocó, identificada por su enlace/imagen. */
+  /**
+   * Tras una navegación (volver a la lista): vuelve a sustituir la tarjeta que se tocó, identificada por su enlace/imagen, en
+   * cuanto aparece (se observa el documento) para que casi no llegue a verse la original.
+   */
   function restoreList(key: string) {
-    win.clearInterval(restoreTimer);
-    let tries = 0;
-    restoreTimer = win.setInterval(() => {
-      if (!cfg || forced || ++tries > 25) {
-        win.clearInterval(restoreTimer);
-        return;
+    stopRestore();
+    const started = Date.now();
+    const attempt = (): boolean => {
+      if (!cfg || forced || Date.now() - started > 15000) {
+        stopRestore();
+        return true;
       }
-      if (!doc.body) return;
+      if (!doc.body) return false;
       const c = findCardByKey(doc, key);
-      if (c) {
-        win.clearInterval(restoreTimer);
-        forced = substitute(c, listContent(), !!cfg.detail);
-      }
-    }, 200);
+      if (!c) return false;
+      stopRestore();
+      const link = pageMode() ? cfg.detail!.pageUrl : undefined;
+      forced = substitute(c, listContent(), !!cfg.detail && !link, link);
+      return true;
+    };
+    if (attempt()) return;
+    let queued = false;
+    restoreObs = new MutationObserver(() => {
+      if (queued) return;
+      queued = true;
+      win.setTimeout(() => {
+        queued = false;
+        if (restoreObs) attempt();
+      }, 30);
+    });
+    restoreObs.observe(doc, { childList: true, subtree: true, attributes: true, attributeFilter: ['src', 'srcset', 'href'] });
+    restoreTimer = win.setInterval(attempt, 250); // por si la web no cambia el DOM (o el observador no llega a tiempo)
+  }
+
+  function stopRestore() {
+    win.clearInterval(restoreTimer);
+    restoreObs?.disconnect();
+    restoreObs = undefined;
   }
 
   function reset() {
+    listTok++;
     kill(forced);
     endFicha();
     win.clearInterval(fichaTimer);
-    win.clearInterval(restoreTimer);
+    stopRestore();
     st = { session: st.session, key: st.key, used: false };
     saveState();
     doc.querySelectorAll(`[${FORCED_ATTR}]`).forEach((e) => e.removeAttribute(FORCED_ATTR));
@@ -525,7 +593,7 @@ function install(win: Window & typeof globalThis) {
         cfg.html?.length ?? 0,
         (cfg.texts ?? []).join('\u0001'),
         cfg.title ?? '',
-        cfg.detail ? cfg.detail.imageUrl.length + ':' + cfg.detail.imageUrl.slice(-64) + ':' + (cfg.detail.html?.length ?? 0) : '',
+        cfg.detail ? cfg.detail.imageUrl.length + ':' + cfg.detail.imageUrl.slice(-64) + ':' + (cfg.detail.html?.length ?? 0) + ':' + (cfg.detail.pageUrl ?? '') : '',
       ].join('|');
       const session = cfg.session ?? null;
       if (configured && st.key === key && st.session === session) {
@@ -535,6 +603,7 @@ function install(win: Window & typeof globalThis) {
         return;
       }
       configured = true;
+      listTok++;
       forced = null;
       fichaForced = null;
       fichaExtras = [];
@@ -545,12 +614,12 @@ function install(win: Window & typeof globalThis) {
         if (prev && prev.key === key && prev.session === session) {
           st = prev;
           if (st.used && cfg.mode === 'tap') {
-            if (st.listKey) restoreList(st.listKey);
+            if (st.listKey && onListPage()) restoreList(st.listKey);
             // La ficha es OTRA página: ventana propia desde que carga ésta (la carga puede tardar más que lo que quedaba de la
             // ventana del toque). No se hace al volver a la lista (misma URL que la del toque).
             const now = Date.now();
             const since = now - ((st.fichaUntil ?? 0) - FICHA_WINDOW_MS);
-            if (cfg.detail && !st.fichaDone && st.fichaUntil && since < NAV_GRACE_MS && stripHash(win.location.href) !== st.fromHref) {
+            if (cfg.detail && !pageMode() && !st.fichaDone && st.fichaUntil && since < NAV_GRACE_MS && stripHash(win.location.href) !== st.fromHref) {
               st.fichaUntil = Math.max(st.fichaUntil, now + FICHA_WINDOW_MS);
               saveState();
               watchFicha(null, st.fichaUntil);
@@ -583,7 +652,7 @@ function install(win: Window & typeof globalThis) {
       shortcutRow.stop();
       win.clearInterval(sweepTimer);
       win.clearInterval(fichaTimer);
-      win.clearInterval(restoreTimer);
+      stopRestore();
       idle.disarm();
       tap.setArmed(false);
     },

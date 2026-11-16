@@ -44,6 +44,8 @@ class JsQuoteTest {
         assertTrue(js.contains("session:3,"))
         assertFalse(ForceConfig("u").toJs().contains("detail"))
         assertFalse(ForceConfig("u", detail = DetailItem("d", emptyList(), null)).toJs().contains("html"))
+        assertFalse(ForceConfig("u", detail = DetailItem("d", emptyList(), null)).toJs().contains("pageUrl"))
+        assertTrue(ForceConfig("u", detail = DetailItem("d", emptyList(), null, "https://a.b/c?d=1")).toJs().contains(",pageUrl:\"https://a.b/c?d=1\"}"))
     }
 
     @Test fun shortcutsAreIncludedOnlyWhenPresent() {

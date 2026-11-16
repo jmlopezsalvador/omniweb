@@ -63,7 +63,7 @@ test('panel: cerrar la ficha deja la lista sustituida y un segundo toque NO vuel
   await expect.poll(() => heroBlue(page)).toBe(true);
   await page.click('#close');
   await expect(page.locator('#panel')).toHaveCount(0);
-  expect(await forcedCard(page)).toBe('5'); // «al volver, el elemento está sustituido»
+  await expect.poll(() => forcedCard(page)).toBe('5'); // «al volver, el elemento está sustituido»
   const q = await showCard(page, 7);
   await page.waitForTimeout(600);
   await page.mouse.click(q.x, q.y);
@@ -242,4 +242,25 @@ test('un logo suelto entre bloques de la página no cuenta como lista aunque hay
   const r = await page.evaluate(() => document.querySelector('#hdr')!.getBoundingClientRect().toJSON());
   await page.mouse.click(r.x + r.width / 2, r.y + r.height / 2);
   expect(await forcedCard(page)).toBeNull();
+});
+
+const DETAIL77 = pathToFileURL(resolve('dist/test/detail.html')).href + '?n=77';
+
+test('ficha = página: el toque lleva DIRECTAMENTE a la página real del elemento forzado y la lista vuelve sustituida y con ese enlace', async ({ page }) => {
+  await open(page, '?realnav=1', { html: SNAP, texts: undefined, detail: { imageUrl: BLUE, pageUrl: DETAIL77 } });
+  const p = await showCard(page, 5);
+  await page.waitForTimeout(600);
+  await page.mouse.click(p.x, p.y);
+  await page.waitForURL(/detail\.html\?n=77/); // la del forzado, no la tocada (n=5)
+  await expect(page.locator('#n')).toHaveText('#77');
+  await page.waitForTimeout(500);
+  expect(await heroBlue(page)).toBe(false); // dentro de la ficha NO se sustituye nada: es la real
+  await page.goBack();
+  await page.waitForURL(/page\.html/);
+  await expect.poll(() => forcedCard(page), { timeout: 8000 }).toBe('5');
+  // la tarjeta sustituida abre la misma ficha real
+  const q = await showCard(page, 5);
+  await page.waitForTimeout(600);
+  await page.mouse.click(q.x, q.y);
+  await page.waitForURL(/detail\.html\?n=77/);
 });
