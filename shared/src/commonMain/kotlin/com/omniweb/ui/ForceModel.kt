@@ -31,17 +31,23 @@ data class DetailItem(
 )
 
 /**
- * Si la ficha capturada está en OTRA página distinta de la lista (otro host o otra ruta), devuelve su dirección sin `#`; si es
- * un panel de la misma página (misma ruta), null. Solo http(s).
+ * Dirección de la ficha capturada si TIENE dirección propia distinta de la de la lista; null si no la tiene (panel sin cambio
+ * de URL: se sustituye dentro). Solo http(s).
+ *  - Otro host u otra ruta (Amazon, YouTube): se devuelve sin `#`.
+ *  - Misma ruta pero distinta consulta o `#` (panel de Google Imágenes, que añade `#sv=…`): se devuelve COMPLETA, con `#`
+ *    (cargada en frío la web reconstruye la ficha; probado en Google Imágenes).
  */
 fun detailPageUrl(listPage: String, detailPage: String): String? {
-    fun split(u: String): Pair<String, String>? {
-        val m = Regex("^(https?)://([^/?#]+)([^?#]*)").find(u.trim()) ?: return null
-        return m.groupValues[2].lowercase() to m.groupValues[3].ifEmpty { "/" }
+    // host, ruta, consulta, hash
+    fun split(u: String): List<String>? {
+        val m = Regex("^(https?)://([^/?#]+)([^?#]*)(\\?[^#]*)?(#.*)?").find(u.trim()) ?: return null
+        val g = m.groupValues
+        return listOf(g[2].lowercase(), g[3].ifEmpty { "/" }, g[4], g[5].let { if (it == "#") "" else it })
     }
     val a = split(listPage) ?: return null
     val b = split(detailPage) ?: return null
-    return if (a == b) null else detailPage.trim().substringBefore('#')
+    if (a[0] != b[0] || a[1] != b[1]) return detailPage.trim().substringBefore('#')
+    return if (a[2] == b[2] && a[3] == b[3]) null else detailPage.trim()
 }
 
 /** Forzaje guardado de un sitio: un elemento ya existente en la web, con su imagen en local. */

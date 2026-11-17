@@ -347,7 +347,17 @@ function install(win: Window & typeof globalThis) {
     st.fromHref = stripHash(win.location.href);
     saveState();
     forced = substitute(c, listContent(), false, url);
-    win.setTimeout(() => win.location.assign(url), 0);
+    // Ficha en la MISMA ruta que la lista y solo con otro `#` (panel de Google Imágenes): asignar solo cambiaría el hash en el
+    // mismo documento (entradas de historial «del mismo documento» que la tecla atrás no recorre bien). Se añade un parámetro
+    // inofensivo a la consulta para que sea una navegación completa (como Amazon): la web reconstruye la ficha en frío y
+    // «atrás» vuelve a la lista.
+    let target = url;
+    if (stripHash(url) === stripHash(win.location.href)) {
+      const i = url.indexOf('#');
+      const base = i < 0 ? url : url.slice(0, i);
+      target = base + (base.includes('?') ? '&' : '?') + 'omniweb=1' + (i < 0 ? '' : url.slice(i));
+    }
+    win.setTimeout(() => win.location.assign(target), 0);
     return true;
   }
 

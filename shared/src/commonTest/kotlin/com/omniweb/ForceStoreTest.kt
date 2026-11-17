@@ -259,7 +259,11 @@ class ForceStoreTest {
         // la ficha es otra página (otra ruta o host): su dirección sin #; un panel de la misma ruta: null
         assertEquals("https://www.amazon.es/dp/B0X?th=1", detailPageUrl("https://www.amazon.es/s?k=a", "https://www.amazon.es/dp/B0X?th=1#x"))
         assertEquals("https://m.youtube.com/watch?v=1", detailPageUrl("https://m.youtube.com/results?q=a", "https://m.youtube.com/watch?v=1"))
-        assertNull(detailPageUrl("https://www.google.com/search?q=a&tbm=isch", "https://www.google.com/search?q=a&tbm=isch&imgrc=1#fragment"))
+        // misma ruta pero la ficha añade # o consulta (Google Imágenes): dirección COMPLETA, con #
+        assertEquals("https://www.google.com/search?q=a&udm=2#sv=XYZ", detailPageUrl("https://www.google.com/search?q=a&udm=2", "https://www.google.com/search?q=a&udm=2#sv=XYZ"))
+        assertEquals("https://www.google.com/search?q=a&imgrc=1", detailPageUrl("https://www.google.com/search?q=a", "https://www.google.com/search?q=a&imgrc=1"))
+        // sin cambio de URL (o solo un # vacío): panel sin dirección propia
+        assertNull(detailPageUrl("https://www.google.com/search?q=a", "https://www.google.com/search?q=a#"))
         assertNull(detailPageUrl("file:///android_asset/test/page.html", "file:///android_asset/test/detail.html"))
     }
 }
