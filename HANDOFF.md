@@ -11,6 +11,7 @@ App Android + iOS (Kotlin Multiplatform + Compose) tipo «navegador mágico»: e
 - Tests: motor 53 (Vitest) + 45 e2e (Playwright) + Gradle `:shared:testDebugUnitTest`, todos verdes.
 
 ## Hecho y verificado
+- (2026-11-19) Guía de inicio rápido + pantalla de Instrucciones + icono definitivo (Android verificado en emulador: guía, Empezar, desactivar, Ajustes → Instrucciones/Guía, tecla atrás). iOS: código común + `BackPressEffect` stub + icono 1024 sin compilar ni probar.
 - Android (emulador `omniweb-emu`): flujo completo en Amazon real: Preparar (lista + ficha) → «La ficha es una PÁGINA distinta» → Efecto: tocar un producto abre la página real del producto forzado; atrás devuelve la lista con la tarjeta forzada. Favoritos con marco de navegador y pulsación larga → Ajustes.
 - Google Imágenes real: diagnosticado y corregido (imágenes apiladas en la ficha, tarjeta clonada que perdía el enlace), pero NO reverificado tras los últimos cambios (aviso de cookies).
 

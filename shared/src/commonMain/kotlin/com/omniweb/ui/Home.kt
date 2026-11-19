@@ -18,6 +18,8 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
@@ -98,6 +100,8 @@ internal fun HomeScreen(
     onEffect: (Site) -> Unit,
     onChanged: () -> Unit,
     onMessage: (String?) -> Unit,
+    onInstructions: () -> Unit,
+    onGuide: () -> Unit,
 ) {
     if (tab == HomeTab.Favorites) {
         FavoritesFrame(store, blobs, version, onEffect, onAdmin = { onTab(HomeTab.Settings) })
@@ -107,7 +111,7 @@ internal fun HomeScreen(
         Box(Modifier.weight(1f).fillMaxWidth()) {
             when (tab) {
                 HomeTab.Sites -> SitesTab(store, blobs, version, message, onPrepare, onEffect, onChanged, onMessage)
-                else -> SettingsTab(store, version, onChanged, onMessage)
+                else -> SettingsTab(store, version, onChanged, onMessage, onInstructions, onGuide)
             }
         }
         BottomTabs(tab, onTab)
@@ -397,14 +401,22 @@ private fun SiteCard(
 // ───────────────────────── Ajustes ─────────────────────────
 
 @Composable
-private fun SettingsTab(store: ForceStore, version: Int, onChanged: () -> Unit, onMessage: (String?) -> Unit) {
+private fun SettingsTab(
+    store: ForceStore,
+    version: Int,
+    onChanged: () -> Unit,
+    onMessage: (String?) -> Unit,
+    onInstructions: () -> Unit,
+    onGuide: () -> Unit,
+) {
     val practice = remember(version) { store.practiceMode() }
     val haptics = remember(version) { store.haptics() }
     val homeStyle = remember(version) { store.homeStyle() }
+    val guideOn = remember(version) { store.quickGuide() }
     var confirmClear by remember { mutableStateOf(false) }
 
     Column(
-        Modifier.fillMaxSize().imePadding().padding(horizontal = 20.dp).padding(top = 16.dp),
+        Modifier.fillMaxSize().verticalScroll(rememberScrollState()).imePadding().padding(horizontal = 20.dp).padding(top = 16.dp, bottom = 16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         Text("Ajustes", style = MaterialTheme.typography.headlineLarge)
@@ -436,16 +448,21 @@ private fun SettingsTab(store: ForceStore, version: Int, onChanged: () -> Unit, 
             }
         }
         Surface(color = MaterialTheme.colorScheme.surface, shape = RoundedCornerShape(18.dp), modifier = Modifier.fillMaxWidth()) {
-            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                Text("Cómo se usa", style = MaterialTheme.typography.titleMedium)
+            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("Ayuda", style = MaterialTheme.typography.titleMedium)
                 Text(
-                    """1. Sitios → Preparar: busca en el sitio y toca el elemento de la lista. Después entra en su ficha (como lo haría el espectador) y captura su imagen principal.
-2. Favoritos (lo que ve el espectador, sin barra de pestañas): al tocar un icono se lanza el efecto del sitio (si está preparado). Se abre el inicio del sitio. Con el truco armado, quien desliza, para y pulsa un elemento de la lista lo ve sustituido; la web abre su ficha con lo que capturaste.
-3. Gestos ocultos: en Favoritos, pulsación larga en la barra de URL = vuelves a Ajustes (con la barra de pestañas). En el efecto, pulsación larga en la barra de URL (menú) y botón de volumen o esquina inferior derecha (armar). Los botones atrás/adelante de la barra inferior funcionan: si la ficha es otra página, se puede volver.""",
+                    "Manual completo del efecto, la preparación y los ajustes, y la guía de bienvenida.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
+                    Button(onClick = onInstructions, modifier = Modifier.weight(1f).height(46.dp), shape = RoundedCornerShape(14.dp)) { Text("Instrucciones") }
+                    OutlinedButton(onClick = onGuide, modifier = Modifier.weight(1f).height(46.dp), shape = RoundedCornerShape(14.dp)) { Text("Guía rápida") }
+                }
             }
+        }
+        SettingRow("Mostrar la guía al iniciar", "La guía de inicio rápido aparece cada vez que se abre la app hasta que la desactives.", guideOn) {
+            store.setQuickGuide(it); onChanged()
         }
     }
 

@@ -23,3 +23,7 @@ expect fun isIosPlatform(): Boolean
 
 /** Vibración de confirmación al armar (`armed=true`: un pulso) o desarmar (`false`: dos pulsos cortos). */
 expect fun vibrateFeedback(armed: Boolean)
+
+/** Mientras `enabled`, la tecla/gesto atrás del sistema llama a `onBack` (en iOS no hay tecla atrás: no hace nada). */
+@Composable
+expect fun BackPressEffect(enabled: Boolean, onBack: () -> Unit)

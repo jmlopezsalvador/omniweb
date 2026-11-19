@@ -64,13 +64,16 @@ private sealed interface Screen {
     data object Home : Screen
     data class CaptureOf(val site: Site) : Screen
     data class EffectOf(val site: Site, val item: ForcedItem) : Screen
+    data class Guide(val fromSettings: Boolean) : Screen
+    data object Instructions : Screen
 }
 
 /** Raíz Compose común: inicio (sitios) → Preparar (captura) / Efecto. */
 @Composable
 fun OmniWebRoot(prefs: KeyValueStore, blobs: BlobStore) {
     val store = remember { ForceStore(prefs, blobs) }
-    var screen by remember { mutableStateOf<Screen>(Screen.Home) }
+    // La guía de inicio rápido sale al arrancar mientras no se haya desactivado
+    var screen by remember { mutableStateOf<Screen>(if (store.quickGuide()) Screen.Guide(fromSettings = false) else Screen.Home) }
     var message by remember { mutableStateOf<String?>(null) }
     var version by remember { mutableStateOf(0) } // fuerza releer el almacén tras guardar
     var homeTab by remember { mutableStateOf(HomeTab.Favorites) } // pestaña del inicio; sobrevive a Preparar/Efecto
@@ -110,7 +113,19 @@ fun OmniWebRoot(prefs: KeyValueStore, blobs: BlobStore) {
                     },
                     onChanged = { version++ },
                     onMessage = { message = it },
+                    onInstructions = { screen = Screen.Instructions },
+                    onGuide = { screen = Screen.Guide(fromSettings = true) },
                 )
+                is Screen.Guide -> QuickGuideScreen(
+                    disableInitially = !store.quickGuide(),
+                    fromSettings = s.fromSettings,
+                    onClose = { disable ->
+                        store.setQuickGuide(!disable)
+                        version++
+                        screen = Screen.Home
+                    },
+                )
+                Screen.Instructions -> InstructionsScreen(onBack = { homeTab = HomeTab.Settings; screen = Screen.Home })
                 is Screen.CaptureOf -> CaptureScreen(
                     site = s.site,
                     store = store,

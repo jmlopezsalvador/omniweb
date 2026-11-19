@@ -80,3 +80,8 @@ actual fun vibrateFeedback(armed: Boolean) {
 /** iOS: Skia (la misma que dibuja Compose) decodifica png, jpg e ico. */
 actual fun decodeImageBitmap(bytes: ByteArray): ImageBitmap? =
     runCatching { Image.makeFromEncoded(bytes).toComposeImageBitmap() }.getOrNull()
+
+@Composable
+actual fun BackPressEffect(enabled: Boolean, onBack: () -> Unit) {
+    // iOS no tiene tecla atrás: las pantallas llevan su propio botón «‹»
+}

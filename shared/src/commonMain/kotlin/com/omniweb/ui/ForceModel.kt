@@ -178,6 +178,10 @@ class ForceStore(private val prefs: KeyValueStore, private val blobs: BlobStore)
     fun haptics(): Boolean = prefs.getBoolean("haptics", true)
     fun setHaptics(on: Boolean) = prefs.putBoolean("haptics", on)
 
+    /** Guía de inicio rápido: si está activa se muestra al arrancar la app (se desactiva al final de la guía o en Ajustes). */
+    fun quickGuide(): Boolean = prefs.getBoolean("quickGuide", true)
+    fun setQuickGuide(on: Boolean) = prefs.putBoolean("quickGuide", on)
+
     /** Modo práctica: al salir del efecto se borran historial, cookies y caché. */
     /** Aspecto de la pestaña Favoritos: [HOME_GRID] (cuadrícula de iconos) o [HOME_GOOGLE] (web de Google con la fila de sitios). */
     fun homeStyle(): String = prefs.getString("homeStyle")?.takeIf { it == HOME_GOOGLE } ?: HOME_GRID

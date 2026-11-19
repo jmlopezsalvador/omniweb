@@ -11,6 +11,7 @@ import android.os.VibratorManager
 import android.webkit.CookieManager
 import android.webkit.WebStorage
 import android.webkit.WebView
+import androidx.activity.compose.BackHandler
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
@@ -131,3 +132,8 @@ actual fun vibrateFeedback(armed: Boolean) {
 
 actual fun decodeImageBitmap(bytes: ByteArray): ImageBitmap? =
     runCatching { BitmapFactory.decodeByteArray(bytes, 0, bytes.size)?.asImageBitmap() }.getOrNull()
+
+@Composable
+actual fun BackPressEffect(enabled: Boolean, onBack: () -> Unit) {
+    BackHandler(enabled = enabled, onBack = onBack)
+}
